@@ -36,7 +36,9 @@ class PivotFixerApp:
         self.output_dir = ""
         self.last_generated_files = [] 
 
+        # 설정 변수 (-10 ~ 10 지원)
         self.offset_y = tk.IntVar(value=0)
+        self.offset_x = tk.IntVar(value=0) # 새로 추가된 가로 이동 변수
         self.h_align = tk.BooleanVar(value=True)
         self.overwrite = tk.BooleanVar(value=False)
 
@@ -46,53 +48,40 @@ class PivotFixerApp:
         self.setup_ui()
 
     def setup_styles(self):
-        """ttk 위젯을 모던하게 꾸미는 스타일 정의"""
         style = ttk.Style(self.root)
-        # 기본 테마를 플랫한 clam으로 설정
         style.theme_use("clam")
 
-        # 전역 기본 폰트
         default_font = ("Malgun Gothic", 10)
         bold_font = ("Malgun Gothic", 10, "bold")
 
-        # 프레임 스타일
         style.configure("TFrame", background=BG_COLOR)
         style.configure("Panel.TFrame", background=PANEL_BG)
 
-        # 라벨 프레임 (각 구역 제목)
         style.configure("TLabelframe", background=PANEL_BG, borderwidth=1, bordercolor=BORDER_COLOR)
         style.configure("TLabelframe.Label", background=PANEL_BG, foreground=PRIMARY_COLOR, font=("Malgun Gothic", 11, "bold"), padding=(5, 5))
 
-        # 라벨 스타일
         style.configure("TLabel", background=PANEL_BG, foreground=TEXT_COLOR, font=default_font)
         style.configure("Muted.TLabel", foreground=TEXT_MUTED, font=("Malgun Gothic", 9))
         style.configure("Danger.TLabel", foreground=DANGER_COLOR, font=bold_font)
         style.configure("Success.TLabel", foreground=SUCCESS_COLOR, font=bold_font)
 
-        # 체크버튼 스타일
         style.configure("TCheckbutton", background=PANEL_BG, foreground=TEXT_COLOR, font=default_font)
         style.map("TCheckbutton", background=[("active", PANEL_BG)])
 
-        # 콤보박스
         style.configure("TCombobox", padding=5, font=default_font)
 
-        # 버튼 기본 스타일 (일반)
         style.configure("TButton", font=default_font, padding=6, background="#ffffff", borderwidth=1, bordercolor=BORDER_COLOR)
         style.map("TButton", background=[("active", "#f3f4f6")])
 
-        # Primary 버튼 (파란색)
         style.configure("Primary.TButton", font=bold_font, padding=6, background=PRIMARY_COLOR, foreground="white", borderwidth=0)
         style.map("Primary.TButton", background=[("active", PRIMARY_HOVER)])
 
-        # Success 버튼 (초록색 - 처리시작)
         style.configure("Success.TButton", font=("Malgun Gothic", 12, "bold"), padding=10, background=SUCCESS_COLOR, foreground="white", borderwidth=0)
         style.map("Success.TButton", background=[("active", SUCCESS_HOVER)])
 
-        # 스크롤바
         style.configure("TScrollbar", background="#e5e7eb", troughcolor=PANEL_BG, borderwidth=0, arrowsize=12)
 
     def setup_ui(self):
-        # 전체를 감싸는 메인 컨테이너 (여백 줌)
         main_container = ttk.Frame(self.root, style="TFrame")
         main_container.pack(fill="both", expand=True, padx=20, pady=20)
 
@@ -101,9 +90,8 @@ class PivotFixerApp:
         # ==========================================
         frame_left = ttk.LabelFrame(main_container, text=" 📂 파일 목록 ", width=300)
         frame_left.pack(side="left", fill="y", padx=(0, 10))
-        frame_left.pack_propagate(False) # 크기 고정
+        frame_left.pack_propagate(False)
 
-        # 파일 추가/삭제 버튼 묶음
         frame_btns = ttk.Frame(frame_left, style="Panel.TFrame")
         frame_btns.pack(fill="x", padx=10, pady=(10, 5))
         ttk.Button(frame_btns, text="파일/폴더 열기", command=self.load_files_dialog, style="Primary.TButton").pack(side="left", expand=True, fill="x", padx=(0, 5))
@@ -111,7 +99,6 @@ class PivotFixerApp:
 
         ttk.Label(frame_left, text="이곳으로 이미지를 드래그 앤 드롭 하세요.", style="Muted.TLabel").pack(pady=5)
 
-        # 리스트 박스 디자인 커스텀
         frame_list = ttk.Frame(frame_left, style="Panel.TFrame")
         frame_list.pack(expand=True, fill="both", padx=10, pady=5)
         
@@ -152,14 +139,26 @@ class PivotFixerApp:
         lf_settings = ttk.LabelFrame(frame_mid, text=" ⚙️ 보정 설정 ")
         lf_settings.pack(fill="x", pady=(0, 10))
 
+        # 오프셋 범위 배열 (-10 ~ +10)
+        offset_values = list(range(-10, 11))
+
+        # 세로 보정 설정
         frame_y = ttk.Frame(lf_settings, style="Panel.TFrame")
-        frame_y.pack(fill="x", padx=15, pady=15)
-        ttk.Label(frame_y, text="세로 보정값 (px):").pack(side="left")
-        cb_y = ttk.Combobox(frame_y, textvariable=self.offset_y, values=[0, 1, 2, 3, 4, 5, 6], state="readonly", width=5)
+        frame_y.pack(fill="x", padx=15, pady=(15, 5))
+        ttk.Label(frame_y, text="세로 이동 오프셋:").pack(side="left")
+        cb_y = ttk.Combobox(frame_y, textvariable=self.offset_y, values=offset_values, state="readonly", width=5)
         cb_y.pack(side="left", padx=10)
         cb_y.bind("<<ComboboxSelected>>", lambda e: self.update_preview())
 
-        ttk.Checkbutton(lf_settings, text="좌우 피봇 보정 (알파영역 중앙정렬)", variable=self.h_align, command=self.update_preview).pack(anchor="w", padx=15, pady=(0, 10))
+        # 가로 보정 설정
+        frame_x = ttk.Frame(lf_settings, style="Panel.TFrame")
+        frame_x.pack(fill="x", padx=15, pady=(0, 10))
+        ttk.Label(frame_x, text="가로 이동 오프셋:").pack(side="left")
+        cb_x = ttk.Combobox(frame_x, textvariable=self.offset_x, values=offset_values, state="readonly", width=5)
+        cb_x.pack(side="left", padx=10)
+        cb_x.bind("<<ComboboxSelected>>", lambda e: self.update_preview())
+
+        ttk.Checkbutton(lf_settings, text="좌우 알파 Bbox 중앙 정렬 (자동 맞춤)", variable=self.h_align, command=self.update_preview).pack(anchor="w", padx=15, pady=(0, 10))
         ttk.Label(lf_settings, text="* 캔버스 넓이는 원본의 약 2배로 자동 확장됩니다.", style="Muted.TLabel").pack(anchor="w", padx=15, pady=(0, 15))
 
         # --- 2-2: 저장 및 처리 프레임 ---
@@ -189,18 +188,15 @@ class PivotFixerApp:
         frame_right = ttk.LabelFrame(main_container, text=" 👁️ 실시간 미리보기 ")
         frame_right.pack(side="left", expand=True, fill="both")
 
-        # 미리보기 상단 라벨
         frame_right_lbls = ttk.Frame(frame_right, style="Panel.TFrame")
         frame_right_lbls.pack(fill="x", padx=10, pady=(10, 5))
         
         ttk.Label(frame_right_lbls, text="[ 원본 캔버스 ]", font=("Malgun Gothic", 10, "bold")).pack(side="left", expand=True)
         ttk.Label(frame_right_lbls, text="[ 피봇 보정 완료 ]", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR).pack(side="left", expand=True)
 
-        # 캔버스 묶음 (가운데 정렬)
         frame_canvases = ttk.Frame(frame_right, style="Panel.TFrame")
         frame_canvases.pack(expand=True, fill="both", padx=15, pady=(0, 15))
         
-        # 캔버스 테두리를 부드럽게 표현
         canvas_bg = "#ffffff"
         canvas_bd = 1
         canvas_relief = "solid"
@@ -218,7 +214,7 @@ class PivotFixerApp:
     def draw_checkerboard(self, canvas, width, height, size=10):
         for y in range(0, height, size):
             for x in range(0, width, size):
-                color = "#ffffff" if ((x//size) + (y//size)) % 2 == 0 else "#f1f5f9" # 더 부드러운 체커보드 색상
+                color = "#ffffff" if ((x//size) + (y//size)) % 2 == 0 else "#f1f5f9"
                 canvas.create_rectangle(x, y, x+size, y+size, fill=color, outline="", tags="checkerboard")
         canvas.tag_lower("checkerboard")
 
@@ -334,7 +330,7 @@ class PivotFixerApp:
             img = img.convert("RGBA")
         return img.split()[-1].getbbox()
 
-    def process_image(self, img, offset_y, h_align):
+    def process_image(self, img, offset_y, offset_x, h_align):
         if img.mode != "RGBA":
             img = img.convert("RGBA")
             
@@ -354,9 +350,9 @@ class PivotFixerApp:
 
         if h_align:
             cx_visible = (left + right) // 2
-            paste_x = pivot_x - cx_visible
+            paste_x = pivot_x - cx_visible + offset_x
         else:
-            paste_x = pivot_x - (W // 2)
+            paste_x = pivot_x - (W // 2) + offset_x
 
         paste_y = pivot_y - lower + offset_y
 
@@ -382,9 +378,8 @@ class PivotFixerApp:
 
         try:
             img = Image.open(self.preview_path).convert("RGBA")
-            res_img = self.process_image(img, self.offset_y.get(), self.h_align.get())
+            res_img = self.process_image(img, self.offset_y.get(), self.offset_x.get(), self.h_align.get())
 
-            # 캔버스 크기 조정에 맞춘 스케일 (220x450 캔버스 기준 안전 영역 200x430)
             img_preview = self.resize_for_preview(img, 200, 430)
             self.tk_orig = ImageTk.PhotoImage(img_preview)
             self.canvas_orig.create_image(110, 225, image=self.tk_orig, anchor="center", tags="preview_image")
@@ -393,7 +388,6 @@ class PivotFixerApp:
             self.tk_res = ImageTk.PhotoImage(res_preview)
             self.canvas_res.create_image(110, 225, image=self.tk_res, anchor="center", tags="preview_image")
 
-            # 십자선 (시안색)
             self.canvas_res.create_line(0, 225, 220, 225, fill="#06b6d4", width=1, tags="crosshair")
             self.canvas_res.create_line(110, 0, 110, 450, fill="#06b6d4", width=1, tags="crosshair")
             
@@ -414,13 +408,14 @@ class PivotFixerApp:
         success_count = 0
         h_align_val = self.h_align.get()
         offset_y_val = self.offset_y.get()
+        offset_x_val = self.offset_x.get()
 
         self.last_generated_files.clear()
 
         for idx, path in enumerate(self.input_paths):
             try:
                 img = Image.open(path)
-                res_img = self.process_image(img, offset_y_val, h_align_val)
+                res_img = self.process_image(img, offset_y_val, offset_x_val, h_align_val)
                 
                 img.close()
                 
