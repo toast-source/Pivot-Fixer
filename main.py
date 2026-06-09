@@ -342,19 +342,41 @@ class PivotFixerApp:
         else:
             left, upper, right, lower = bbox
 
-        nW = (W * 2) if (W * 2) % 2 == 0 else (W * 2) + 1
-        nH = (H * 2) if (H * 2) % 2 == 0 else (H * 2) + 1
+        # 가로(X) 배치 기준: h_align 활성화 시 알파 Bounding Box 중앙, 아닐 시 캔버스 중앙
+        # offset_x: 음수(-)면 왼쪽, 양수(+)면 오른쪽
+        if h_align:
+            cx_visible = (left + right) // 2
+            rel_x = -cx_visible + offset_x
+        else:
+            rel_x = -(W // 2) + offset_x
+
+        # 세로(Y) 배치 기준: 하단(lower) 픽셀이 피봇 중앙선 바로 위에 얹히도록
+        # 직관성 반영: 음수(-) 입력 시 이미지가 아래로 내려감, 양수(+) 입력 시 위로 올라감
+        rel_y = -lower - offset_y
+
+        # 이미지가 절대 잘리지 않기 위해 십자선 기준 상하좌우로 필요한 최소 공간 계산
+        min_half_w = max(-rel_x, rel_x + W)
+        min_half_h = max(-rel_y, rel_y + H)
+
+        nW = min_half_w * 2
+        nH = min_half_h * 2
+
+        # 기본적으로 원본의 2배 크기는 유지 (최소 여백 보장)
+        base_nW = (W * 2) if (W * 2) % 2 == 0 else (W * 2) + 1
+        base_nH = (H * 2) if (H * 2) % 2 == 0 else (H * 2) + 1
+
+        nW = max(nW, base_nW)
+        nH = max(nH, base_nH)
+
+        # 짝수 강제 (0.5px 오차 방지)
+        if nW % 2 != 0: nW += 1
+        if nH % 2 != 0: nH += 1
 
         pivot_x = nW // 2
         pivot_y = nH // 2
 
-        if h_align:
-            cx_visible = (left + right) // 2
-            paste_x = pivot_x - cx_visible + offset_x
-        else:
-            paste_x = pivot_x - (W // 2) + offset_x
-
-        paste_y = pivot_y - lower + offset_y
+        paste_x = pivot_x + rel_x
+        paste_y = pivot_y + rel_y
 
         new_img = Image.new("RGBA", (nW, nH), (0, 0, 0, 0))
         new_img.paste(img, (paste_x, paste_y))
