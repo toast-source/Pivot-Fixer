@@ -5,12 +5,28 @@ from tkinter import filedialog, messagebox, ttk, simpledialog
 from tkinterdnd2 import TkinterDnD, DND_FILES
 from PIL import Image, ImageTk
 
+# 전체 컬러 팔레트
+BG_COLOR = "#f4f5f7"
+PANEL_BG = "#ffffff"
+PRIMARY_COLOR = "#3b82f6"
+PRIMARY_HOVER = "#2563eb"
+SUCCESS_COLOR = "#10b981"
+SUCCESS_HOVER = "#059669"
+DANGER_COLOR = "#ef4444"
+TEXT_COLOR = "#1f2937"
+TEXT_MUTED = "#6b7280"
+BORDER_COLOR = "#e5e7eb"
+
 class PivotFixerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("PNG 피봇 보정 툴 (픽셀 아트 최적화)")
-        self.root.geometry("1150x600")
+        self.root.title("PNG 피봇 보정 툴 (Pixel Art Optimizer)")
+        self.root.geometry("1150x650")
         self.root.resizable(False, False)
+        self.root.configure(bg=BG_COLOR)
+
+        # ttk 스타일 전역 설정
+        self.setup_styles()
 
         self.root.drop_target_register(DND_FILES)
         self.root.dnd_bind('<<Drop>>', self.on_drop)
@@ -29,126 +45,195 @@ class PivotFixerApp:
 
         self.setup_ui()
 
+    def setup_styles(self):
+        """ttk 위젯을 모던하게 꾸미는 스타일 정의"""
+        style = ttk.Style(self.root)
+        # 기본 테마를 플랫한 clam으로 설정
+        style.theme_use("clam")
+
+        # 전역 기본 폰트
+        default_font = ("Malgun Gothic", 10)
+        bold_font = ("Malgun Gothic", 10, "bold")
+
+        # 프레임 스타일
+        style.configure("TFrame", background=BG_COLOR)
+        style.configure("Panel.TFrame", background=PANEL_BG)
+
+        # 라벨 프레임 (각 구역 제목)
+        style.configure("TLabelframe", background=PANEL_BG, borderwidth=1, bordercolor=BORDER_COLOR)
+        style.configure("TLabelframe.Label", background=PANEL_BG, foreground=PRIMARY_COLOR, font=("Malgun Gothic", 11, "bold"), padding=(5, 5))
+
+        # 라벨 스타일
+        style.configure("TLabel", background=PANEL_BG, foreground=TEXT_COLOR, font=default_font)
+        style.configure("Muted.TLabel", foreground=TEXT_MUTED, font=("Malgun Gothic", 9))
+        style.configure("Danger.TLabel", foreground=DANGER_COLOR, font=bold_font)
+        style.configure("Success.TLabel", foreground=SUCCESS_COLOR, font=bold_font)
+
+        # 체크버튼 스타일
+        style.configure("TCheckbutton", background=PANEL_BG, foreground=TEXT_COLOR, font=default_font)
+        style.map("TCheckbutton", background=[("active", PANEL_BG)])
+
+        # 콤보박스
+        style.configure("TCombobox", padding=5, font=default_font)
+
+        # 버튼 기본 스타일 (일반)
+        style.configure("TButton", font=default_font, padding=6, background="#ffffff", borderwidth=1, bordercolor=BORDER_COLOR)
+        style.map("TButton", background=[("active", "#f3f4f6")])
+
+        # Primary 버튼 (파란색)
+        style.configure("Primary.TButton", font=bold_font, padding=6, background=PRIMARY_COLOR, foreground="white", borderwidth=0)
+        style.map("Primary.TButton", background=[("active", PRIMARY_HOVER)])
+
+        # Success 버튼 (초록색 - 처리시작)
+        style.configure("Success.TButton", font=("Malgun Gothic", 12, "bold"), padding=10, background=SUCCESS_COLOR, foreground="white", borderwidth=0)
+        style.map("Success.TButton", background=[("active", SUCCESS_HOVER)])
+
+        # 스크롤바
+        style.configure("TScrollbar", background="#e5e7eb", troughcolor=PANEL_BG, borderwidth=0, arrowsize=12)
+
     def setup_ui(self):
+        # 전체를 감싸는 메인 컨테이너 (여백 줌)
+        main_container = ttk.Frame(self.root, style="TFrame")
+        main_container.pack(fill="both", expand=True, padx=20, pady=20)
+
         # ==========================================
         # 1단: 좌측 패널 (파일 목록)
         # ==========================================
-        frame_left = tk.Frame(self.root, padx=10, pady=10, width=280)
-        frame_left.pack(side="left", fill="y")
-        frame_left.pack_propagate(False)
+        frame_left = ttk.LabelFrame(main_container, text=" 📂 파일 목록 ", width=300)
+        frame_left.pack(side="left", fill="y", padx=(0, 10))
+        frame_left.pack_propagate(False) # 크기 고정
 
-        tk.Label(frame_left, text="[ 1. 파일 목록 ]", font=("Arial", 10, "bold")).pack(pady=(0, 5))
+        # 파일 추가/삭제 버튼 묶음
+        frame_btns = ttk.Frame(frame_left, style="Panel.TFrame")
+        frame_btns.pack(fill="x", padx=10, pady=(10, 5))
+        ttk.Button(frame_btns, text="파일/폴더 열기", command=self.load_files_dialog, style="Primary.TButton").pack(side="left", expand=True, fill="x", padx=(0, 5))
+        ttk.Button(frame_btns, text="비우기", command=self.clear_list).pack(side="right", fill="x")
+
+        ttk.Label(frame_left, text="이곳으로 이미지를 드래그 앤 드롭 하세요.", style="Muted.TLabel").pack(pady=5)
+
+        # 리스트 박스 디자인 커스텀
+        frame_list = ttk.Frame(frame_left, style="Panel.TFrame")
+        frame_list.pack(expand=True, fill="both", padx=10, pady=5)
         
-        frame_btns = tk.Frame(frame_left)
-        frame_btns.pack(fill="x", pady=2)
-        tk.Button(frame_btns, text="파일/폴더 열기", command=self.load_files_dialog, width=15).pack(side="left", expand=True, fill="x", padx=(0, 2))
-        tk.Button(frame_btns, text="목록 비우기", command=self.clear_list, width=10).pack(side="right", expand=True, fill="x", padx=(2, 0))
-
-        tk.Label(frame_left, text="여기로 PNG를 드래그 앤 드롭 하세요", fg="gray", font=("Arial", 9)).pack(pady=5)
-
-        frame_list = tk.Frame(frame_left)
-        frame_list.pack(expand=True, fill="both")
-        
-        scrollbar = tk.Scrollbar(frame_list)
+        scrollbar = ttk.Scrollbar(frame_list)
         scrollbar.pack(side="right", fill="y")
         
-        self.listbox = tk.Listbox(frame_list, yscrollcommand=scrollbar.set, selectmode="single")
+        self.listbox = tk.Listbox(
+            frame_list, 
+            yscrollcommand=scrollbar.set, 
+            selectmode="single", 
+            font=("Malgun Gothic", 10),
+            bg="#f8fafc", 
+            fg=TEXT_COLOR, 
+            selectbackground=PRIMARY_COLOR, 
+            selectforeground="white",
+            relief="flat", 
+            highlightthickness=1, 
+            highlightbackground=BORDER_COLOR
+        )
         self.listbox.pack(side="left", expand=True, fill="both")
         scrollbar.config(command=self.listbox.yview)
         
         self.listbox.bind('<<ListboxSelect>>', self.on_list_select)
-        # 이름 변경을 위한 더블클릭 이벤트 바인딩
         self.listbox.bind('<Double-Button-1>', self.on_list_double_click)
 
-        tk.Label(frame_left, text="* 목록을 더블클릭하여 이름을 변경할 수 있습니다.", fg="#ff6600", font=("Arial", 8)).pack(pady=(2, 2))
-
-        self.lbl_input_info = tk.Label(frame_left, text="선택된 파일: 0개", fg="blue")
-        self.lbl_input_info.pack(pady=(2, 0))
+        ttk.Label(frame_left, text="💡 팁: 더블클릭하여 파일 이름을 바꿀 수 있습니다.", style="Muted.TLabel").pack(pady=(2, 5))
+        self.lbl_input_info = ttk.Label(frame_left, text="선택된 파일: 0개", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR)
+        self.lbl_input_info.pack(pady=(5, 10))
 
         # ==========================================
         # 2단: 중앙 패널 (설정 및 처리)
         # ==========================================
-        frame_mid = tk.Frame(self.root, padx=10, pady=10, width=280)
-        frame_mid.pack(side="left", fill="y")
+        frame_mid = ttk.Frame(main_container, width=320, style="TFrame")
+        frame_mid.pack(side="left", fill="y", padx=(0, 10))
         frame_mid.pack_propagate(False)
 
-        tk.Label(frame_mid, text="[ 2. 보정 설정 ]", font=("Arial", 10, "bold")).pack(pady=(0, 10))
-        
-        frame_y = tk.Frame(frame_mid)
-        frame_y.pack(pady=5, anchor="w")
-        tk.Label(frame_y, text="세로 보정값 (px):").pack(side="left")
+        # --- 2-1: 보정 설정 프레임 ---
+        lf_settings = ttk.LabelFrame(frame_mid, text=" ⚙️ 보정 설정 ")
+        lf_settings.pack(fill="x", pady=(0, 10))
+
+        frame_y = ttk.Frame(lf_settings, style="Panel.TFrame")
+        frame_y.pack(fill="x", padx=15, pady=15)
+        ttk.Label(frame_y, text="세로 보정값 (px):").pack(side="left")
         cb_y = ttk.Combobox(frame_y, textvariable=self.offset_y, values=[0, 1, 2, 3, 4, 5, 6], state="readonly", width=5)
-        cb_y.pack(side="left", padx=5)
+        cb_y.pack(side="left", padx=10)
         cb_y.bind("<<ComboboxSelected>>", lambda e: self.update_preview())
 
-        chk_h = tk.Checkbutton(frame_mid, text="좌우 피봇 보정 (보이는 영역 중앙정렬)", variable=self.h_align, command=self.update_preview)
-        chk_h.pack(pady=5, anchor="w")
+        ttk.Checkbutton(lf_settings, text="좌우 피봇 보정 (알파영역 중앙정렬)", variable=self.h_align, command=self.update_preview).pack(anchor="w", padx=15, pady=(0, 10))
+        ttk.Label(lf_settings, text="* 캔버스 넓이는 원본의 약 2배로 자동 확장됩니다.", style="Muted.TLabel").pack(anchor="w", padx=15, pady=(0, 15))
 
-        tk.Label(frame_mid, text="* 캔버스 넓이는 원본의 약 2배로 확장됩니다.", fg="green", font=("Arial", 9)).pack(pady=(0, 15), anchor="w")
+        # --- 2-2: 저장 및 처리 프레임 ---
+        lf_save = ttk.LabelFrame(frame_mid, text=" 💾 저장 및 처리 ")
+        lf_save.pack(fill="both", expand=True)
 
-        tk.Label(frame_mid, text="[ 3. 저장 및 처리 ]", font=("Arial", 10, "bold")).pack(pady=(10, 10))
+        ttk.Checkbutton(lf_save, text="원본 파일에 그대로 덮어쓰기 (!주의)", variable=self.overwrite, command=self.toggle_overwrite).pack(anchor="w", padx=15, pady=(15, 5))
 
-        chk_ow = tk.Checkbutton(frame_mid, text="원본 파일 덮어쓰기 (!주의)", variable=self.overwrite, fg="red", command=self.toggle_overwrite)
-        chk_ow.pack(pady=5, anchor="w")
-
-        self.btn_out_dir = tk.Button(frame_mid, text="저장 폴더 선택", width=25, command=self.select_output_dir)
-        self.btn_out_dir.pack(pady=5)
+        self.btn_out_dir = ttk.Button(lf_save, text="📁 다른 저장 폴더 선택", command=self.select_output_dir)
+        self.btn_out_dir.pack(fill="x", padx=15, pady=(10, 5))
         
-        self.lbl_out_dir = tk.Label(frame_mid, text="원본 폴더에 _pivotfix 추가 저장", fg="gray", wraplength=250)
-        self.lbl_out_dir.pack(pady=5)
+        self.lbl_out_dir = ttk.Label(lf_save, text="기본값: 원본 폴더에 '_pivotfix' 추가", style="Muted.TLabel", wraplength=280)
+        self.lbl_out_dir.pack(padx=15, pady=(0, 15))
 
-        frame_bottom = tk.Frame(frame_mid)
-        frame_bottom.pack(side="bottom", fill="x", pady=10)
+        # 하단 액션 버튼
+        frame_actions = ttk.Frame(lf_save, style="Panel.TFrame")
+        frame_actions.pack(side="bottom", fill="x", padx=15, pady=15)
         
-        self.btn_undo = tk.Button(frame_bottom, text="↩ 되돌리기 (마지막 처리 취소)", width=25, command=self.undo_batch)
-        self.btn_undo.pack(pady=(0, 10))
+        self.btn_undo = ttk.Button(frame_actions, text="↩ 마지막 작업 되돌리기", command=self.undo_batch)
+        self.btn_undo.pack(fill="x", pady=(0, 10))
         
-        tk.Button(frame_bottom, text="처리 시작", width=25, height=3, bg="#4CAF50", fg="white", font=("Arial", 10, "bold"), command=self.run_batch).pack()
+        ttk.Button(frame_actions, text="▶ 처리 시작", style="Success.TButton", command=self.run_batch).pack(fill="x")
 
         # ==========================================
         # 3단: 우측 패널 (미리보기)
         # ==========================================
-        frame_right = tk.Frame(self.root, padx=10, pady=10)
+        frame_right = ttk.LabelFrame(main_container, text=" 👁️ 실시간 미리보기 ")
         frame_right.pack(side="left", expand=True, fill="both")
 
-        frame_right_lbls = tk.Frame(frame_right)
-        frame_right_lbls.pack(fill="x", pady=(0, 5))
+        # 미리보기 상단 라벨
+        frame_right_lbls = ttk.Frame(frame_right, style="Panel.TFrame")
+        frame_right_lbls.pack(fill="x", padx=10, pady=(10, 5))
         
-        tk.Label(frame_right_lbls, text="[ 원본 캔버스 ]", font=("Arial", 10, "bold")).pack(side="left", expand=True)
-        tk.Label(frame_right_lbls, text="[ 2배 확장 + 피봇 보정 후 ]", font=("Arial", 10, "bold")).pack(side="left", expand=True)
+        ttk.Label(frame_right_lbls, text="[ 원본 캔버스 ]", font=("Malgun Gothic", 10, "bold")).pack(side="left", expand=True)
+        ttk.Label(frame_right_lbls, text="[ 피봇 보정 완료 ]", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR).pack(side="left", expand=True)
 
-        frame_canvases = tk.Frame(frame_right)
-        frame_canvases.pack(expand=True, fill="both")
+        # 캔버스 묶음 (가운데 정렬)
+        frame_canvases = ttk.Frame(frame_right, style="Panel.TFrame")
+        frame_canvases.pack(expand=True, fill="both", padx=15, pady=(0, 15))
         
-        self.canvas_orig = tk.Canvas(frame_canvases, width=260, height=450, bg="#ffffff", relief="sunken", bd=2)
-        self.canvas_orig.pack(side="left", padx=(0, 10))
-        self.draw_checkerboard(self.canvas_orig, 260, 450)
+        # 캔버스 테두리를 부드럽게 표현
+        canvas_bg = "#ffffff"
+        canvas_bd = 1
+        canvas_relief = "solid"
+        
+        self.canvas_orig = tk.Canvas(frame_canvases, width=220, height=450, bg=canvas_bg, relief=canvas_relief, bd=canvas_bd, highlightthickness=0)
+        self.canvas_orig.pack(side="left", expand=True)
+        self.draw_checkerboard(self.canvas_orig, 220, 450)
 
-        self.canvas_res = tk.Canvas(frame_canvases, width=260, height=450, bg="#ffffff", relief="sunken", bd=2)
-        self.canvas_res.pack(side="left")
-        self.draw_checkerboard(self.canvas_res, 260, 450)
+        self.canvas_res = tk.Canvas(frame_canvases, width=220, height=450, bg=canvas_bg, relief=canvas_relief, bd=canvas_bd, highlightthickness=0)
+        self.canvas_res.pack(side="left", expand=True)
+        self.draw_checkerboard(self.canvas_res, 220, 450)
 
     # ------------------ 기능 메서드 ------------------
 
     def draw_checkerboard(self, canvas, width, height, size=10):
         for y in range(0, height, size):
             for x in range(0, width, size):
-                color = "#ffffff" if ((x//size) + (y//size)) % 2 == 0 else "#dddddd"
+                color = "#ffffff" if ((x//size) + (y//size)) % 2 == 0 else "#f1f5f9" # 더 부드러운 체커보드 색상
                 canvas.create_rectangle(x, y, x+size, y+size, fill=color, outline="", tags="checkerboard")
         canvas.tag_lower("checkerboard")
 
     def toggle_overwrite(self):
         if self.overwrite.get():
-            self.btn_out_dir.config(state="disabled")
-            self.btn_undo.config(state="disabled")
-            self.lbl_out_dir.config(text="원본 파일에 그대로 덮어씌웁니다.\n(되돌리기 불가!)", fg="red")
+            self.btn_out_dir.state(['disabled'])
+            self.btn_undo.state(['disabled'])
+            self.lbl_out_dir.config(text="원본 이미지 자체를 덮어씁니다.\n되돌릴 수 없으니 주의하세요!", foreground=DANGER_COLOR)
         else:
-            self.btn_out_dir.config(state="normal")
-            self.btn_undo.config(state="normal")
+            self.btn_out_dir.state(['!disabled'])
+            self.btn_undo.state(['!disabled'])
             if self.output_dir:
-                self.lbl_out_dir.config(text=self.output_dir, fg="gray")
+                self.lbl_out_dir.config(text=self.output_dir, foreground=TEXT_MUTED)
             else:
-                self.lbl_out_dir.config(text="원본 폴더에 _pivotfix 추가 저장", fg="gray")
+                self.lbl_out_dir.config(text="기본값: 원본 폴더에 '_pivotfix' 추가", foreground=TEXT_MUTED)
 
     def load_files_dialog(self):
         paths = filedialog.askopenfilenames(filetypes=[("PNG Files", "*.png")])
@@ -169,11 +254,10 @@ class PivotFixerApp:
         if png_files:
             self.add_paths_to_list(png_files)
         else:
-            messagebox.showwarning("경고", "드롭된 항목 중 PNG 파일이 없습니다.")
+            messagebox.showwarning("안내", "PNG 파일이 발견되지 않았습니다.")
 
     def add_paths_to_list(self, new_paths):
         for p in new_paths:
-            # 중복 방지 (os.path.abspath 로 정규화하여 비교)
             p_norm = os.path.normpath(p)
             if p_norm not in [os.path.normpath(ip) for ip in self.input_paths]:
                 self.input_paths.append(p_norm)
@@ -194,7 +278,6 @@ class PivotFixerApp:
             self.update_preview()
 
     def on_list_double_click(self, event):
-        """리스트 항목 더블클릭 시 파일 이름 변경"""
         selection = self.listbox.curselection()
         if not selection: return
         
@@ -203,7 +286,6 @@ class PivotFixerApp:
         old_dir = os.path.dirname(old_path)
         old_name = os.path.basename(old_path)
         
-        # 이름 변경 팝업창
         new_name = simpledialog.askstring("이름 변경", "새 파일 이름을 입력하세요:", initialvalue=old_name, parent=self.root)
         
         if new_name and new_name != old_name:
@@ -217,20 +299,15 @@ class PivotFixerApp:
                 return
                 
             try:
-                # 실제 운영체제 파일 이름 변경
                 os.rename(old_path, new_path)
-                
-                # 내부 데이터 업데이트
                 self.input_paths[idx] = new_path
                 self.listbox.delete(idx)
                 self.listbox.insert(idx, new_name)
                 self.listbox.selection_set(idx)
                 
-                # 미리보기 중이던 파일이라면 미리보기 경로도 갱신
                 if self.preview_path == old_path:
                     self.preview_path = new_path
                     
-                messagebox.showinfo("완료", "파일 이름이 성공적으로 변경되었습니다.")
             except Exception as e:
                 messagebox.showerror("오류", f"이름 변경 실패: {e}")
 
@@ -247,10 +324,10 @@ class PivotFixerApp:
         folder_path = filedialog.askdirectory()
         if folder_path:
             self.output_dir = folder_path
-            self.lbl_out_dir.config(text=folder_path, fg="gray")
+            self.lbl_out_dir.config(text=folder_path, foreground=PRIMARY_COLOR)
         else:
             self.output_dir = ""
-            self.lbl_out_dir.config(text="원본 폴더에 _pivotfix 추가 저장", fg="gray")
+            self.lbl_out_dir.config(text="기본값: 원본 폴더에 '_pivotfix' 추가", foreground=TEXT_MUTED)
 
     def get_alpha_bbox(self, img):
         if img.mode != "RGBA":
@@ -307,29 +384,31 @@ class PivotFixerApp:
             img = Image.open(self.preview_path).convert("RGBA")
             res_img = self.process_image(img, self.offset_y.get(), self.h_align.get())
 
-            img_preview = self.resize_for_preview(img, 240, 430)
+            # 캔버스 크기 조정에 맞춘 스케일 (220x450 캔버스 기준 안전 영역 200x430)
+            img_preview = self.resize_for_preview(img, 200, 430)
             self.tk_orig = ImageTk.PhotoImage(img_preview)
-            self.canvas_orig.create_image(130, 225, image=self.tk_orig, anchor="center", tags="preview_image")
+            self.canvas_orig.create_image(110, 225, image=self.tk_orig, anchor="center", tags="preview_image")
 
-            res_preview = self.resize_for_preview(res_img, 240, 430)
+            res_preview = self.resize_for_preview(res_img, 200, 430)
             self.tk_res = ImageTk.PhotoImage(res_preview)
-            self.canvas_res.create_image(130, 225, image=self.tk_res, anchor="center", tags="preview_image")
+            self.canvas_res.create_image(110, 225, image=self.tk_res, anchor="center", tags="preview_image")
 
-            self.canvas_res.create_line(0, 225, 260, 225, fill="#00e5ff", width=1, tags="crosshair")
-            self.canvas_res.create_line(130, 0, 130, 450, fill="#00e5ff", width=1, tags="crosshair")
+            # 십자선 (시안색)
+            self.canvas_res.create_line(0, 225, 220, 225, fill="#06b6d4", width=1, tags="crosshair")
+            self.canvas_res.create_line(110, 0, 110, 450, fill="#06b6d4", width=1, tags="crosshair")
             
         except Exception as e:
-            print(f"미리보기 오류: {e}")
+            print(f"미리보기 업데이트 실패: {e}")
 
     def run_batch(self):
         if not self.input_paths:
-            messagebox.showwarning("경고", "처리할 파일이 없습니다.")
+            messagebox.showwarning("안내", "먼저 이미지를 추가해주세요.")
             return
 
         is_overwrite = self.overwrite.get()
         
         if is_overwrite:
-            ans = messagebox.askyesno("경고", "원본 파일을 덮어씁니다. 이 작업은 되돌릴 수 없습니다!\n진행하시겠습니까?")
+            ans = messagebox.askyesno("경고", "원본 파일 자체를 덮어씁니다.\n이 작업은 되돌리기로 복구할 수 없습니다.\n\n정말로 진행하시겠습니까?")
             if not ans: return
 
         success_count = 0
@@ -358,19 +437,19 @@ class PivotFixerApp:
                 res_img.save(save_path, "PNG")
                 success_count += 1
             except Exception as e:
-                print(f"파일 처리 실패: {path} - {e}")
+                print(f"파일 처리 실패 ({path}): {e}")
                 
             if idx % 10 == 0:
                 self.root.update()
 
         if is_overwrite:
-            messagebox.showinfo("완료", f"총 {success_count}개 파일 덮어쓰기 완료!")
+            messagebox.showinfo("처리 완료", f"총 {success_count}개의 파일 덮어쓰기가 완료되었습니다! 🎉")
         else:
-            messagebox.showinfo("완료", f"총 {len(self.input_paths)}개 중 {success_count}개 파일 처리 완료!")
+            messagebox.showinfo("처리 완료", f"총 {len(self.input_paths)}개 중 {success_count}개 파일의 보정 생성이 완료되었습니다! 🎉")
 
     def undo_batch(self):
         if self.overwrite.get():
-            messagebox.showwarning("경고", "덮어쓰기 모드에서는 되돌리기 기능을 사용할 수 없습니다.")
+            messagebox.showwarning("경고", "덮어쓰기 모드에서는 파일 삭제(되돌리기) 기능을 사용할 수 없습니다.")
             return
             
         if not self.last_generated_files:
@@ -387,10 +466,10 @@ class PivotFixerApp:
                     os.remove(path)
                     count += 1
                 except Exception as e:
-                    print(f"삭제 실패: {path} - {e}")
+                    print(f"삭제 실패 ({path}): {e}")
                     
         self.last_generated_files.clear()
-        messagebox.showinfo("되돌리기 완료", f"{count}개의 파일이 성공적으로 삭제되었습니다.")
+        messagebox.showinfo("되돌리기 완료", f"{count}개의 파일이 안전하게 삭제되었습니다. 🗑️")
 
 if __name__ == "__main__":
     try:
