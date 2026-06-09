@@ -412,7 +412,7 @@ class PivotFixerApp:
             self.canvas_orig.create_image(110, 225, image=self.tk_orig, anchor="center", tags="preview_image")
 
             # 원본 이미지의 Bounding Box (크기) 계산 및 그리기
-            orig_w, orig_h = img_preview.width(), img_preview.height()
+            orig_w, orig_h = img_preview.width, img_preview.height
             orig_x1 = 110 - (orig_w // 2)
             orig_y1 = 225 - (orig_h // 2)
             orig_x2 = orig_x1 + orig_w
@@ -424,7 +424,7 @@ class PivotFixerApp:
             self.canvas_res.create_image(110, 225, image=self.tk_res, anchor="center", tags="preview_image")
 
             # 최종 보정된 이미지의 Bounding Box (크기) 계산 및 그리기
-            res_w, res_h = res_preview.width(), res_preview.height()
+            res_w, res_h = res_preview.width, res_preview.height
             res_x1 = 110 - (res_w // 2)
             res_y1 = 225 - (res_h // 2)
             res_x2 = res_x1 + res_w
