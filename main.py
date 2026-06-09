@@ -368,6 +368,11 @@ class PivotFixerApp:
         nW = max(nW, base_nW)
         nH = max(nH, base_nH)
 
+        # 캔버스를 항상 정사각형으로 강제 (가장 긴 변 기준)
+        max_size = max(nW, nH)
+        nW = max_size
+        nH = max_size
+
         # 짝수 강제 (0.5px 오차 방지)
         if nW % 2 != 0: nW += 1
         if nH % 2 != 0: nH += 1
@@ -406,9 +411,25 @@ class PivotFixerApp:
             self.tk_orig = ImageTk.PhotoImage(img_preview)
             self.canvas_orig.create_image(110, 225, image=self.tk_orig, anchor="center", tags="preview_image")
 
+            # 원본 이미지의 Bounding Box (크기) 계산 및 그리기
+            orig_w, orig_h = img_preview.width(), img_preview.height()
+            orig_x1 = 110 - (orig_w // 2)
+            orig_y1 = 225 - (orig_h // 2)
+            orig_x2 = orig_x1 + orig_w
+            orig_y2 = orig_y1 + orig_h
+            self.canvas_orig.create_rectangle(orig_x1, orig_y1, orig_x2, orig_y2, outline="#ef4444", dash=(2, 2), tags="preview_image")
+
             res_preview = self.resize_for_preview(res_img, 200, 430)
             self.tk_res = ImageTk.PhotoImage(res_preview)
             self.canvas_res.create_image(110, 225, image=self.tk_res, anchor="center", tags="preview_image")
+
+            # 최종 보정된 이미지의 Bounding Box (크기) 계산 및 그리기
+            res_w, res_h = res_preview.width(), res_preview.height()
+            res_x1 = 110 - (res_w // 2)
+            res_y1 = 225 - (res_h // 2)
+            res_x2 = res_x1 + res_w
+            res_y2 = res_y1 + res_h
+            self.canvas_res.create_rectangle(res_x1, res_y1, res_x2, res_y2, outline="#ef4444", dash=(2, 2), tags="preview_image")
 
             self.canvas_res.create_line(0, 225, 220, 225, fill="#06b6d4", width=1, tags="crosshair")
             self.canvas_res.create_line(110, 0, 110, 450, fill="#06b6d4", width=1, tags="crosshair")
