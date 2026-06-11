@@ -243,14 +243,13 @@ class PivotFixerApp:
         self.frame_canvases = ttk.Frame(frame_right, style="Panel.TFrame")
         self.frame_canvases.pack(expand=True, fill="both", padx=10, pady=(0, 10))
         
+        # 캔버스 테두리를 두꺼운 검은선(solid)에서 세련된 1px 슬레이트 선으로 변경
         canvas_bg = "#ffffff"
-        canvas_bd = 1
-        canvas_relief = "solid"
         
-        self.canvas_orig = tk.Canvas(self.frame_canvases, bg=canvas_bg, relief=canvas_relief, bd=canvas_bd, highlightthickness=0)
+        self.canvas_orig = tk.Canvas(self.frame_canvases, bg=canvas_bg, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, relief="flat")
         self.canvas_orig.pack(side="left", expand=True, fill="both", padx=(0, 5))
 
-        self.canvas_res = tk.Canvas(self.frame_canvases, bg=canvas_bg, relief=canvas_relief, bd=canvas_bd, highlightthickness=0)
+        self.canvas_res = tk.Canvas(self.frame_canvases, bg=canvas_bg, bd=0, highlightthickness=1, highlightbackground=BORDER_COLOR, relief="flat")
         self.canvas_res.pack(side="left", expand=True, fill="both", padx=(5, 0))
 
         self.frame_canvases.bind("<Configure>", self.on_canvas_resize)
@@ -662,6 +661,30 @@ class PivotFixerApp:
             messagebox.showinfo("안내", "되돌릴 작업 내역이 없습니다.")
             return
             
+        confirm = messagebox.askyesno("되돌리기 확인", f"방금 생성된 {len(self.last_generated_files)}개의 _pivotfix.png 파일을 삭제하시겠습니까?")
+        if not confirm: return
+        
+        count = 0
+        for path in self.last_generated_files:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                    count += 1
+                except Exception as e:
+                    print(f"삭제 실패 ({path}): {e}")
+                    
+        self.last_generated_files.clear()
+        messagebox.showinfo("되돌리기 완료", f"{count}개의 파일이 안전하게 삭제되었습니다. 🗑️")
+
+if __name__ == "__main__":
+    try:
+        root = TkinterDnD.Tk()
+    except Exception as e:
+        print("tkinterdnd2 초기화 오류:", e)
+        root = tk.Tk()
+        
+    app = PivotFixerApp(root)
+    root.mainloop()      
         confirm = messagebox.askyesno("되돌리기 확인", f"방금 생성된 {len(self.last_generated_files)}개의 _pivotfix.png 파일을 삭제하시겠습니까?")
         if not confirm: return
         
