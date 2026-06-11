@@ -21,8 +21,11 @@ class PivotFixerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("PNG 피봇 보정 툴 (Pixel Art Optimizer)")
-        self.root.geometry("1150x650")
-        self.root.resizable(False, False)
+        
+        # 반응형 창 크기 조절 허용
+        self.root.geometry("1300x750")
+        self.root.minsize(1100, 650)
+        self.root.resizable(True, True)
         self.root.configure(bg=BG_COLOR)
 
         self.setup_styles()
@@ -30,7 +33,6 @@ class PivotFixerApp:
         self.root.drop_target_register(DND_FILES)
         self.root.dnd_bind('<<Drop>>', self.on_drop)
 
-        # 파일 관리를 위한 리스트 딕셔너리 구조: {"id": 트리뷰_ID, "path": 절대경로, "name": 파일명, "checked": bool}
         self.file_data = []
         self.preview_path = None
         self.output_dir = ""
@@ -43,10 +45,17 @@ class PivotFixerApp:
         
         # 저장 방식 관련 변수
         self.overwrite = tk.BooleanVar(value=False)
-        self.save_mode = tk.StringVar(value="original") # "original" 또는 "single"
+        self.save_mode = tk.StringVar(value="original") 
+
+        # 이미지 변환(Flip/Rotate) 관련 변수
+        self.flip_h = tk.BooleanVar(value=False)
+        self.flip_v = tk.BooleanVar(value=False)
+        self.rotate_angle = tk.StringVar(value="0도 (회전 없음)")
+        self.transform_order = tk.StringVar(value="before") # before: 변환 후 피봇보정, after: 피봇보정 후 변환
 
         self.tk_orig = None
         self.tk_res = None
+        self._resize_timer = None
 
         self.setup_ui()
 
@@ -90,22 +99,21 @@ class PivotFixerApp:
         style.map("Treeview", background=[('selected', PRIMARY_COLOR)], foreground=[('selected', 'white')])
 
     def setup_ui(self):
-        main_container = ttk.Frame(self.root, style="TFrame")
-        main_container.pack(fill="both", expand=True, padx=20, pady=20)
+        # PanedWindow를 사용하여 사용자가 구역 넓이를 직접 드래그로 조절 가능하게 만듦
+        self.paned_main = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
+        self.paned_main.pack(fill="both", expand=True, padx=10, pady=10)
 
         # ==========================================
         # 1단: 좌측 패널 (파일 목록)
         # ==========================================
-        frame_left = ttk.LabelFrame(main_container, text=" 📂 작업 파일 목록 ", width=300)
-        frame_left.pack(side="left", fill="y", padx=(0, 10))
-        frame_left.pack_propagate(False)
+        frame_left = ttk.LabelFrame(self.paned_main, text=" 📂 작업 파일 목록 ")
+        self.paned_main.add(frame_left, weight=1) # weight 설정으로 리사이즈 비율 결정
 
         frame_btns = ttk.Frame(frame_left, style="Panel.TFrame")
         frame_btns.pack(fill="x", padx=10, pady=(10, 5))
         ttk.Button(frame_btns, text="파일/폴더 열기", command=self.load_files_dialog, style="Primary.TButton").pack(side="left", expand=True, fill="x", padx=(0, 5))
         ttk.Button(frame_btns, text="비우기", command=self.clear_list).pack(side="right", fill="x")
 
-        # 체크박스 일괄 제어 버튼
         frame_check_btns = ttk.Frame(frame_left, style="Panel.TFrame")
         frame_check_btns.pack(fill="x", padx=10, pady=(0, 5))
         ttk.Button(frame_check_btns, text="전체 선택", command=self.check_all).pack(side="left", expand=True, fill="x", padx=(0, 2))
@@ -113,7 +121,6 @@ class PivotFixerApp:
 
         ttk.Label(frame_left, text="이미지를 목록으로 드래그 하세요.", style="Muted.TLabel").pack(pady=(0, 5))
 
-        # 트리뷰 (체크박스 및 목록 표시용)
         frame_list = ttk.Frame(frame_left, style="Panel.TFrame")
         frame_list.pack(expand=True, fill="both", padx=10, pady=(0, 5))
         
@@ -136,94 +143,125 @@ class PivotFixerApp:
         self.lbl_input_info.pack(pady=(5, 10))
 
         # ==========================================
-        # 2단: 중앙 패널 (설정 및 처리)
+        # 2단: 중앙 패널 (설정 및 처리) - 스크롤 캔버스 적용
         # ==========================================
-        frame_mid = ttk.Frame(main_container, width=320, style="TFrame")
-        frame_mid.pack(side="left", fill="y", padx=(0, 10))
-        frame_mid.pack_propagate(False)
+        frame_mid_container = ttk.LabelFrame(self.paned_main, text=" ⚙️ 보정 및 변환 설정 ")
+        self.paned_main.add(frame_mid_container, weight=1)
 
-        # --- 2-1: 보정 설정 프레임 ---
-        lf_settings = ttk.LabelFrame(frame_mid, text=" ⚙️ 보정 설정 ")
-        lf_settings.pack(fill="x", pady=(0, 10))
+        # 설정 메뉴가 많아지므로 스크롤 가능한 프레임으로 구성
+        mid_canvas = tk.Canvas(frame_mid_container, bg=PANEL_BG, highlightthickness=0)
+        mid_scrollbar = ttk.Scrollbar(frame_mid_container, orient="vertical", command=mid_canvas.yview)
+        frame_mid = ttk.Frame(mid_canvas, style="Panel.TFrame")
+        
+        frame_mid.bind("<Configure>", lambda e: mid_canvas.configure(scrollregion=mid_canvas.bbox("all")))
+        canvas_window = mid_canvas.create_window((0, 0), window=frame_mid, anchor="nw")
+        mid_canvas.bind("<Configure>", lambda e: mid_canvas.itemconfig(canvas_window, width=e.width))
+
+        mid_canvas.pack(side="left", fill="both", expand=True)
+        mid_scrollbar.pack(side="right", fill="y")
+        mid_canvas.configure(yscrollcommand=mid_scrollbar.set)
+
+        # --- 2-1: 이미지 변환 설정 프레임 (NEW) ---
+        lf_transform = ttk.LabelFrame(frame_mid, text=" 🔄 이미지 변환 (회전/반전) ")
+        lf_transform.pack(fill="x", padx=10, pady=(10, 10))
+
+        ttk.Label(lf_transform, text="변환 적용 시점:").pack(anchor="w", padx=15, pady=(10, 5))
+        ttk.Radiobutton(lf_transform, text="이미지 먼저 변환 후 → 피봇 중앙 보정 (추천)", variable=self.transform_order, value="before", command=self.update_preview).pack(anchor="w", padx=25, pady=2)
+        ttk.Radiobutton(lf_transform, text="피봇 먼저 중앙 보정 후 → 캔버스 전체 변환", variable=self.transform_order, value="after", command=self.update_preview).pack(anchor="w", padx=25, pady=(2, 10))
+
+        frame_flips = ttk.Frame(lf_transform, style="Panel.TFrame")
+        frame_flips.pack(fill="x", padx=15, pady=5)
+        ttk.Checkbutton(frame_flips, text="좌우 반전 (가로 뒤집기)", variable=self.flip_h, command=self.update_preview).pack(side="left", padx=(0, 15))
+        ttk.Checkbutton(frame_flips, text="상하 반전 (세로 뒤집기)", variable=self.flip_v, command=self.update_preview).pack(side="left")
+
+        frame_rot = ttk.Frame(lf_transform, style="Panel.TFrame")
+        frame_rot.pack(fill="x", padx=15, pady=(5, 15))
+        ttk.Label(frame_rot, text="회전 각도:").pack(side="left")
+        rot_values = ["0도 (회전 없음)", "90도 (시계방향)", "180도", "270도 (시계방향)"]
+        cb_rot = ttk.Combobox(frame_rot, textvariable=self.rotate_angle, values=rot_values, state="readonly", width=18)
+        cb_rot.pack(side="left", padx=10)
+        cb_rot.bind("<<ComboboxSelected>>", lambda e: self.update_preview())
+
+        # --- 2-2: 피봇 위치 설정 프레임 ---
+        lf_pivot = ttk.LabelFrame(frame_mid, text=" 🎯 피봇 보정 설정 ")
+        lf_pivot.pack(fill="x", padx=10, pady=(0, 10))
 
         offset_values = list(range(-10, 11))
 
-        frame_y = ttk.Frame(lf_settings, style="Panel.TFrame")
+        frame_y = ttk.Frame(lf_pivot, style="Panel.TFrame")
         frame_y.pack(fill="x", padx=15, pady=(15, 5))
         ttk.Label(frame_y, text="세로 이동 오프셋:").pack(side="left")
         cb_y = ttk.Combobox(frame_y, textvariable=self.offset_y, values=offset_values, state="readonly", width=5)
         cb_y.pack(side="left", padx=10)
         cb_y.bind("<<ComboboxSelected>>", lambda e: self.update_preview())
 
-        frame_x = ttk.Frame(lf_settings, style="Panel.TFrame")
+        frame_x = ttk.Frame(lf_pivot, style="Panel.TFrame")
         frame_x.pack(fill="x", padx=15, pady=(0, 10))
         ttk.Label(frame_x, text="가로 이동 오프셋:").pack(side="left")
         cb_x = ttk.Combobox(frame_x, textvariable=self.offset_x, values=offset_values, state="readonly", width=5)
         cb_x.pack(side="left", padx=10)
         cb_x.bind("<<ComboboxSelected>>", lambda e: self.update_preview())
 
-        ttk.Checkbutton(lf_settings, text="좌우 알파 Bbox 중앙 정렬 (자동 맞춤)", variable=self.h_align, command=self.update_preview).pack(anchor="w", padx=15, pady=(0, 10))
-        ttk.Label(lf_settings, text="* 캔버스는 원본의 2배 정사각형으로 확장됩니다.", style="Muted.TLabel").pack(anchor="w", padx=15, pady=(0, 15))
+        ttk.Checkbutton(lf_pivot, text="좌우 알파 Bbox 중앙 정렬 (자동 맞춤)", variable=self.h_align, command=self.update_preview).pack(anchor="w", padx=15, pady=(0, 15))
 
-        # --- 2-2: 저장 방식 및 처리 프레임 ---
-        lf_save = ttk.LabelFrame(frame_mid, text=" 💾 저장 옵션 및 처리 ")
-        lf_save.pack(fill="both", expand=True)
+        # --- 2-3: 저장 옵션 프레임 ---
+        lf_save = ttk.LabelFrame(frame_mid, text=" 💾 저장 옵션 ")
+        lf_save.pack(fill="x", padx=10, pady=(0, 10))
 
         ttk.Checkbutton(lf_save, text="원본 파일에 그대로 덮어쓰기 (!주의)", variable=self.overwrite, command=self.toggle_overwrite).pack(anchor="w", padx=15, pady=(15, 5))
-
         ttk.Separator(lf_save).pack(fill="x", padx=15, pady=5)
-
         self.rb_orig = ttk.Radiobutton(lf_save, text="각 원본 파일이 있는 폴더에 각각 저장", variable=self.save_mode, value="original", command=self.toggle_save_mode)
         self.rb_orig.pack(anchor="w", padx=15, pady=5)
-
         self.rb_single = ttk.Radiobutton(lf_save, text="지정한 단일 폴더에 모두 모아서 저장", variable=self.save_mode, value="single", command=self.toggle_save_mode)
         self.rb_single.pack(anchor="w", padx=15, pady=5)
 
         self.btn_out_dir = ttk.Button(lf_save, text="📁 단일 저장 폴더 선택", command=self.select_output_dir)
         self.btn_out_dir.pack(fill="x", padx=15, pady=(5, 5))
-        
         self.lbl_out_dir = ttk.Label(lf_save, text="[단일 저장 폴더 지정 안됨]", style="Muted.TLabel", wraplength=280)
-        self.lbl_out_dir.pack(padx=15, pady=(0, 5))
+        self.lbl_out_dir.pack(padx=15, pady=(0, 15))
         
-        self.toggle_save_mode() # 초기 상태 연동
+        self.toggle_save_mode() 
 
         # 하단 액션 버튼
-        frame_actions = ttk.Frame(lf_save, style="Panel.TFrame")
-        frame_actions.pack(side="bottom", fill="x", padx=15, pady=15)
+        frame_actions = ttk.Frame(frame_mid, style="Panel.TFrame")
+        frame_actions.pack(fill="x", padx=10, pady=(0, 20))
         
         self.btn_undo = ttk.Button(frame_actions, text="↩ 마지막 작업 되돌리기", command=self.undo_batch)
         self.btn_undo.pack(fill="x", pady=(0, 10))
-        
         ttk.Button(frame_actions, text="▶ 선택된 파일 처리 시작", style="Success.TButton", command=self.run_batch).pack(fill="x")
 
         # ==========================================
-        # 3단: 우측 패널 (미리보기)
+        # 3단: 우측 패널 (미리보기 - 반응형)
         # ==========================================
-        frame_right = ttk.LabelFrame(main_container, text=" 👁️ 실시간 미리보기 ")
-        frame_right.pack(side="left", expand=True, fill="both")
+        frame_right = ttk.LabelFrame(self.paned_main, text=" 👁️ 실시간 미리보기 (반응형) ")
+        self.paned_main.add(frame_right, weight=3) # 미리보기 영역이 가장 많이 늘어나게 설정
 
         frame_right_lbls = ttk.Frame(frame_right, style="Panel.TFrame")
         frame_right_lbls.pack(fill="x", padx=10, pady=(10, 5))
         
         ttk.Label(frame_right_lbls, text="[ 원본 캔버스 ]", font=("Malgun Gothic", 10, "bold")).pack(side="left", expand=True)
-        ttk.Label(frame_right_lbls, text="[ 피봇 보정 완료 ]", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR).pack(side="left", expand=True)
+        ttk.Label(frame_right_lbls, text="[ 변환 및 보정 완료 ]", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR).pack(side="left", expand=True)
 
-        frame_canvases = ttk.Frame(frame_right, style="Panel.TFrame")
-        frame_canvases.pack(expand=True, fill="both", padx=15, pady=(0, 15))
+        self.frame_canvases = ttk.Frame(frame_right, style="Panel.TFrame")
+        self.frame_canvases.pack(expand=True, fill="both", padx=10, pady=(0, 10))
         
-        canvas_bg = "#ffffff"
-        canvas_bd = 1
-        canvas_relief = "solid"
-        
-        self.canvas_orig = tk.Canvas(frame_canvases, width=220, height=450, bg=canvas_bg, relief=canvas_relief, bd=canvas_bd, highlightthickness=0)
-        self.canvas_orig.pack(side="left", expand=True)
-        self.draw_checkerboard(self.canvas_orig, 220, 450)
+        # 캔버스가 동적으로 리사이즈 되도록 expand=True 적용
+        self.canvas_orig = tk.Canvas(self.frame_canvases, bg="#ffffff", relief="solid", bd=1, highlightthickness=0)
+        self.canvas_orig.pack(side="left", expand=True, fill="both", padx=(0, 5))
 
-        self.canvas_res = tk.Canvas(frame_canvases, width=220, height=450, bg=canvas_bg, relief=canvas_relief, bd=canvas_bd, highlightthickness=0)
-        self.canvas_res.pack(side="left", expand=True)
-        self.draw_checkerboard(self.canvas_res, 220, 450)
+        self.canvas_res = tk.Canvas(self.frame_canvases, bg="#ffffff", relief="solid", bd=1, highlightthickness=0)
+        self.canvas_res.pack(side="left", expand=True, fill="both", padx=(5, 0))
+
+        # 캔버스 크기가 변할 때마다 미리보기를 다시 그리도록 이벤트 바인딩
+        self.frame_canvases.bind("<Configure>", self.on_canvas_resize)
 
     # ------------------ 기능 메서드 ------------------
+
+    def on_canvas_resize(self, event):
+        """창 크기가 변할 때 불필요한 연산 방지를 위해 디바운싱 처리 후 렌더링"""
+        if self._resize_timer:
+            self.root.after_cancel(self._resize_timer)
+        self._resize_timer = self.root.after(100, self.update_preview)
 
     def draw_checkerboard(self, canvas, width, height, size=10):
         for y in range(0, height, size):
@@ -233,7 +271,6 @@ class PivotFixerApp:
         canvas.tag_lower("checkerboard")
 
     def toggle_overwrite(self):
-        """덮어쓰기 여부에 따라 저장 옵션 라디오 버튼들 비활성화/활성화"""
         if self.overwrite.get():
             self.rb_orig.state(['disabled'])
             self.rb_single.state(['disabled'])
@@ -243,10 +280,9 @@ class PivotFixerApp:
             self.rb_orig.state(['!disabled'])
             self.rb_single.state(['!disabled'])
             self.btn_undo.state(['!disabled'])
-            self.toggle_save_mode() # 라디오버튼 상태에 맞춰 단일 폴더 버튼 제어
+            self.toggle_save_mode()
 
     def toggle_save_mode(self):
-        """저장 방식에 따라 단일 폴더 선택 버튼 활성화/비활성화"""
         if not self.overwrite.get():
             if self.save_mode.get() == "single":
                 self.btn_out_dir.state(['!disabled'])
@@ -292,7 +328,6 @@ class PivotFixerApp:
                 
         self.update_selection_info()
         
-        # 새 항목이 추가되었고 현재 미리보기가 없다면 첫번째 새 항목을 선택
         if first_new_id and not self.preview_path:
             self.tree.selection_set(first_new_id)
             self.tree.focus(first_new_id)
@@ -303,11 +338,10 @@ class PivotFixerApp:
                     break
 
     def on_tree_click(self, event):
-        """체크박스 열 클릭 시 상태 토글"""
         region = self.tree.identify_region(event.x, event.y)
         column = self.tree.identify_column(event.x)
         
-        if region == "cell" and column == "#1": # 첫 번째 열(체크박스)
+        if region == "cell" and column == "#1":
             item_id = self.tree.identify_row(event.y)
             if item_id:
                 for f in self.file_data:
@@ -329,11 +363,10 @@ class PivotFixerApp:
                     break
 
     def on_tree_double_click(self, event):
-        """이름 열 더블클릭 시 이름 변경"""
         region = self.tree.identify_region(event.x, event.y)
         column = self.tree.identify_column(event.x)
         
-        if region == "cell" and column == "#2": # 두 번째 열(이름)
+        if region == "cell" and column == "#2":
             item_id = self.tree.identify_row(event.y)
             if not item_id: return
             
@@ -363,8 +396,6 @@ class PivotFixerApp:
                     
                 try:
                     os.rename(old_path, new_path)
-                    
-                    # 내부 데이터 및 트리뷰 업데이트
                     target_f["path"] = new_path
                     target_f["name"] = new_name
                     check_str = "☑" if target_f["checked"] else "☐"
@@ -396,25 +427,45 @@ class PivotFixerApp:
             self.tree.delete(item)
         self.preview_path = None
         self.update_selection_info()
-        self.canvas_orig.delete("preview_image")
-        self.canvas_res.delete("preview_image")
-        self.canvas_res.delete("crosshair")
+        self.canvas_orig.delete("all")
+        self.canvas_res.delete("all")
 
     def select_output_dir(self):
         folder_path = filedialog.askdirectory()
         if folder_path:
             self.output_dir = folder_path
             self.lbl_out_dir.config(text=folder_path, foreground=PRIMARY_COLOR)
-            self.save_mode.set("single") # 경로를 선택하면 자동으로 단일 폴더 모드로 변경
+            self.save_mode.set("single")
 
     def get_alpha_bbox(self, img):
         if img.mode != "RGBA":
             img = img.convert("RGBA")
         return img.split()[-1].getbbox()
 
-    def process_image(self, img, offset_y, offset_x, h_align):
+    def apply_transformations(self, img):
+        """UI에 설정된 뒤집기 및 회전을 순서대로 이미지에 적용합니다."""
+        if self.flip_h.get():
+            img = img.transpose(Image.FLIP_LEFT_RIGHT)
+        if self.flip_v.get():
+            img = img.transpose(Image.FLIP_TOP_BOTTOM)
+            
+        rot_val = self.rotate_angle.get()
+        if "90도" in rot_val:
+            img = img.transpose(Image.ROTATE_270) # PIL의 90도는 반시계방향이므로 270을 써서 시계방향 90도를 맞춤
+        elif "180도" in rot_val:
+            img = img.transpose(Image.ROTATE_180)
+        elif "270도" in rot_val:
+            img = img.transpose(Image.ROTATE_90)
+            
+        return img
+
+    def process_image(self, img, offset_y, offset_x, h_align, order):
         if img.mode != "RGBA":
             img = img.convert("RGBA")
+
+        # 1. '이미지 변환 후 피봇 보정' 옵션 시 원본 이미지를 먼저 변환
+        if order == "before":
+            img = self.apply_transformations(img)
             
         W, H = img.size
         bbox = self.get_alpha_bbox(img)
@@ -459,6 +510,11 @@ class PivotFixerApp:
 
         new_img = Image.new("RGBA", (nW, nH), (0, 0, 0, 0))
         new_img.paste(img, (paste_x, paste_y))
+
+        # 2. '피봇 보정 후 캔버스 변환' 옵션 시 만들어진 넓은 캔버스 전체를 변환
+        if order == "after":
+            new_img = self.apply_transformations(new_img)
+
         return new_img
 
     def resize_for_preview(self, img, max_w, max_h):
@@ -470,47 +526,64 @@ class PivotFixerApp:
         return img.resize((new_w, new_h), Image.Resampling.NEAREST)
 
     def update_preview(self):
-        self.canvas_orig.delete("preview_image")
-        self.canvas_res.delete("preview_image")
-        self.canvas_res.delete("crosshair")
+        self.canvas_orig.delete("all")
+        self.canvas_res.delete("all")
         
+        c_w = self.canvas_orig.winfo_width()
+        c_h = self.canvas_orig.winfo_height()
+        
+        # 캔버스가 아직 그려지지 않아 너비/높이가 1px인 경우 렌더링 무시
+        if c_w <= 1 or c_h <= 1: return
+
+        self.draw_checkerboard(self.canvas_orig, c_w, c_h)
+        self.draw_checkerboard(self.canvas_res, c_w, c_h)
+
         if not self.preview_path or not os.path.exists(self.preview_path):
             return
 
         try:
             img = Image.open(self.preview_path).convert("RGBA")
-            res_img = self.process_image(img, self.offset_y.get(), self.offset_x.get(), self.h_align.get())
+            order = self.transform_order.get()
+            res_img = self.process_image(img, self.offset_y.get(), self.offset_x.get(), self.h_align.get(), order)
 
-            img_preview = self.resize_for_preview(img, 200, 430)
+            # 캔버스 크기에 맞춰 유동적으로 최대 안전 스케일 영역 계산 (패딩 20px)
+            safe_w = c_w - 20
+            safe_h = c_h - 20
+            cx = c_w // 2
+            cy = c_h // 2
+
+            # 원본 미리보기
+            img_preview = self.resize_for_preview(img, safe_w, safe_h)
             self.tk_orig = ImageTk.PhotoImage(img_preview)
-            self.canvas_orig.create_image(110, 225, image=self.tk_orig, anchor="center", tags="preview_image")
+            self.canvas_orig.create_image(cx, cy, image=self.tk_orig, anchor="center", tags="preview_image")
 
             orig_w, orig_h = img_preview.width, img_preview.height
-            orig_x1 = 110 - (orig_w // 2)
-            orig_y1 = 225 - (orig_h // 2)
+            orig_x1 = cx - (orig_w // 2)
+            orig_y1 = cy - (orig_h // 2)
             orig_x2 = orig_x1 + orig_w
             orig_y2 = orig_y1 + orig_h
             self.canvas_orig.create_rectangle(orig_x1, orig_y1, orig_x2, orig_y2, outline="#ef4444", dash=(2, 2), tags="preview_image")
 
-            res_preview = self.resize_for_preview(res_img, 200, 430)
+            # 결과 미리보기
+            res_preview = self.resize_for_preview(res_img, safe_w, safe_h)
             self.tk_res = ImageTk.PhotoImage(res_preview)
-            self.canvas_res.create_image(110, 225, image=self.tk_res, anchor="center", tags="preview_image")
+            self.canvas_res.create_image(cx, cy, image=self.tk_res, anchor="center", tags="preview_image")
 
             res_w, res_h = res_preview.width, res_preview.height
-            res_x1 = 110 - (res_w // 2)
-            res_y1 = 225 - (res_h // 2)
+            res_x1 = cx - (res_w // 2)
+            res_y1 = cy - (res_h // 2)
             res_x2 = res_x1 + res_w
             res_y2 = res_y1 + res_h
             self.canvas_res.create_rectangle(res_x1, res_y1, res_x2, res_y2, outline="#ef4444", dash=(2, 2), tags="preview_image")
 
-            self.canvas_res.create_line(0, 225, 220, 225, fill="#06b6d4", width=1, tags="crosshair")
-            self.canvas_res.create_line(110, 0, 110, 450, fill="#06b6d4", width=1, tags="crosshair")
+            # 십자선 동적 생성
+            self.canvas_res.create_line(0, cy, c_w, cy, fill="#06b6d4", width=1, tags="crosshair")
+            self.canvas_res.create_line(cx, 0, cx, c_h, fill="#06b6d4", width=1, tags="crosshair")
             
         except Exception as e:
             print(f"미리보기 업데이트 실패: {e}")
 
     def run_batch(self):
-        # 체크된 파일들만 모아서 처리 타겟으로 지정
         target_files = [f for f in self.file_data if f["checked"]]
         
         if not target_files:
@@ -531,6 +604,7 @@ class PivotFixerApp:
         h_align_val = self.h_align.get()
         offset_y_val = self.offset_y.get()
         offset_x_val = self.offset_x.get()
+        order = self.transform_order.get()
 
         self.last_generated_files.clear()
 
@@ -538,9 +612,9 @@ class PivotFixerApp:
             path = file_info["path"]
             try:
                 img = Image.open(path)
-                res_img = self.process_image(img, offset_y_val, offset_x_val, h_align_val)
+                res_img = self.process_image(img, offset_y_val, offset_x_val, h_align_val, order)
                 
-                img.close() # 원본 이미지 닫기 (덮어쓰기를 위해)
+                img.close() 
                 
                 if is_overwrite:
                     save_path = path
@@ -549,10 +623,9 @@ class PivotFixerApp:
                     name, ext = os.path.splitext(basename)
                     new_filename = f"{name}_pivotfix.png"
                     
-                    # 저장 모드에 따라 경로 분기
                     if save_mode_val == "single":
                         save_dir = self.output_dir
-                    else: # "original"
+                    else: 
                         save_dir = os.path.dirname(path)
                         
                     save_path = os.path.join(save_dir, new_filename)
