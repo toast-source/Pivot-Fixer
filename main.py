@@ -20,7 +20,8 @@ BORDER_COLOR = "#e5e7eb"
 class PivotFixerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("PNG 피봇 보정 툴 (Pixel Art Optimizer)")
+        self.version = "v0.0.1"
+        self.root.title(f"PNG 피봇 보정 툴 (Pixel Art Optimizer) - {self.version}")
         
         # 가로 배치와 미리보기를 넉넉하게 담기 위해 1200x800 추천 크기 설정
         self.root.geometry("1200x800")
@@ -424,6 +425,26 @@ class PivotFixerApp:
         self.update_selection_info()
 
     def clear_list(self):
+        selected_items = self.tree.selection()
+        
+        # 선택된 항목이 있다면 선택된 것들만 삭제
+        if selected_items:
+            for item_id in selected_items:
+                self.tree.delete(item_id)
+                self.file_data = [f for f in self.file_data if f["id"] != item_id]
+            
+            # 미리보기 중이던 파일이 삭제되었다면 미리보기 초기화
+            if not any(f["path"] == self.preview_path for f in self.file_data):
+                self.preview_path = None
+                self.canvas_orig.delete("all")
+                self.canvas_res.delete("all")
+                self.lbl_orig_dim.config(text="(0 x 0 px)")
+                self.lbl_res_dim.config(text="(0 x 0 px)")
+            
+            self.update_selection_info()
+            return
+            
+        # 선택된 항목이 하나도 없다면 기존처럼 전체 삭제
         self.file_data.clear()
         for item in self.tree.get_children():
             self.tree.delete(item)
