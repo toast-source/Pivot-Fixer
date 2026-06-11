@@ -387,35 +387,17 @@ class PivotFixerApp:
                     
             if not target_f: return
             
-            old_path = target_f["path"]
-            old_dir = os.path.dirname(old_path)
             old_name = target_f["name"]
             
-            new_name = simpledialog.askstring("이름 변경", "새 파일 이름을 입력하세요:", initialvalue=old_name, parent=self.root)
+            new_name = simpledialog.askstring("이름 변경", "저장될 새 파일 이름을 입력하세요:", initialvalue=old_name, parent=self.root)
             
             if new_name and new_name != old_name:
                 if not new_name.lower().endswith(".png"):
                     new_name += ".png"
                     
-                new_path = os.path.join(old_dir, new_name)
-                
-                if os.path.exists(new_path):
-                    messagebox.showerror("오류", "동일한 이름을 가진 파일이 이미 존재합니다.")
-                    return
-                    
-                try:
-                    os.rename(old_path, new_path)
-                    target_f["path"] = new_path
-                    target_f["name"] = new_name
-                    check_str = "☑" if target_f["checked"] else "☐"
-                    self.tree.item(item_id, values=(check_str, new_name))
-                    
-                    if self.preview_path == old_path:
-                        self.preview_path = new_path
-                        self.update_preview()
-                        
-                except Exception as e:
-                    messagebox.showerror("오류", f"이름 변경 실패: {e}")
+                target_f["name"] = new_name
+                check_str = "☑" if target_f["checked"] else "☐"
+                self.tree.item(item_id, values=(check_str, new_name))
 
     def check_all(self):
         for f in self.file_data:
