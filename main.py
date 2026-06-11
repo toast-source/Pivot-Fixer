@@ -153,6 +153,13 @@ class PivotFixerApp:
 
         ttk.Checkbutton(frame_pivot, text="좌우 알파 Bbox 중앙 자동 맞춤", variable=self.h_align, command=self.update_preview).grid(row=1, column=2, rowspan=2, sticky="w", padx=(20, 0))
 
+        # [1-3] 실행 버튼 구역 (맨 우측)
+        frame_actions = ttk.Frame(frame_top_inner, style="Panel.TFrame")
+        frame_actions.pack(side="right", fill="y", padx=(10, 0))
+        
+        ttk.Button(frame_actions, text="▶ 처리 시작", style="Success.TButton", command=self.run_batch).pack(side="top", fill="x", pady=(5, 5))
+        self.btn_undo = ttk.Button(frame_actions, text="↩ 되돌리기", command=self.undo_batch)
+        self.btn_undo.pack(side="top", fill="x")
 
         # ==========================================
         # 2. 하단 패널: PanedWindow (좌: 목록+저장 / 우: 미리보기)
@@ -258,9 +265,12 @@ class PivotFixerApp:
     # ------------------ 기능 메서드 ------------------
 
     def on_canvas_resize(self, event):
-        if self._resize_timer:
-            self.root.after_cancel(self._resize_timer)
-        self._resize_timer = self.root.after(100, self.update_preview)
+        # 자식 캔버스의 이벤트가 아닌, 프레임 자체의 크기 변경만 감지
+        if str(event.widget) == str(self.frame_canvases):
+            if self._resize_timer:
+                self.root.after_cancel(self._resize_timer)
+            # 렌더링 딜레이를 200ms로 늘려 리사이즈 중 랙 방지
+            self._resize_timer = self.root.after(200, self.update_preview)
 
     def draw_checkerboard(self, canvas, width, height, size=10):
         canvas.delete("checkerboard")
