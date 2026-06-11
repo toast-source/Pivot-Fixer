@@ -597,32 +597,53 @@ class PivotFixerApp:
         self.last_generated_files.clear()
 
         for idx, file_info in enumerate(target_files):
-            path = file_info["path"]
+            orig_path = file_info["path"]
+            target_name = file_info["name"]
+            orig_name = os.path.basename(orig_path)
+
             try:
-                img = Image.open(path)
+                img = Image.open(orig_path)
                 res_img = self.process_image(img, offset_y_val, offset_x_val, h_align_val, order)
                 
                 img.close() 
                 
                 if is_overwrite:
-                    save_path = path
-                else:
-                    basename = os.path.basename(path)
-                    name, ext = os.path.splitext(basename)
-                    new_filename = f"{name}_pivotfix.png"
+                    save_dir = os.path.dirname(orig_path)
+                    save_path = os.path.join(save_dir, target_name)
+                    res_img.save(save_path, "PNG")
                     
+                    # 파일 이름이 변경되었다면 기존 원본 파일 삭제
+                    if target_name != orig_name and orig_path != save_path:
+                        if os.path.exists(orig_path):
+                            try:
+                                os.remove(orig_path)
+                            except Exception as e:
+                                print(f"이전 원본 파일 삭제 실패: {e}")
+                    
+                    # 내부 참조 경로 업데이트
+                    file_info["path"] = save_path
+                    if self.preview_path == orig_path:
+                        self.preview_path = save_path
+                else:
                     if save_mode_val == "single":
                         save_dir = self.output_dir
                     else: 
-                        save_dir = os.path.dirname(path)
+                        save_dir = os.path.dirname(orig_path)
+                    
+                    # 사용자가 이름을 변경했다면 그 이름을 쓰고, 변경 안했다면 _pivotfix를 붙임
+                    if target_name == orig_name:
+                        name, ext = os.path.splitext(target_name)
+                        final_filename = f"{name}_pivotfix.png"
+                    else:
+                        final_filename = target_name
                         
-                    save_path = os.path.join(save_dir, new_filename)
+                    save_path = os.path.join(save_dir, final_filename)
                     self.last_generated_files.append(save_path) 
+                    res_img.save(save_path, "PNG")
                 
-                res_img.save(save_path, "PNG")
                 success_count += 1
             except Exception as e:
-                print(f"파일 처리 실패 ({path}): {e}")
+                print(f"파일 처리 실패 ({orig_path}): {e}")
                 
             if idx % 10 == 0:
                 self.root.update()
