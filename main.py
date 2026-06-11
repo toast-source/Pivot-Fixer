@@ -684,28 +684,4 @@ if __name__ == "__main__":
         root = tk.Tk()
         
     app = PivotFixerApp(root)
-    root.mainloop()      
-        confirm = messagebox.askyesno("되돌리기 확인", f"방금 생성된 {len(self.last_generated_files)}개의 _pivotfix.png 파일을 삭제하시겠습니까?")
-        if not confirm: return
-        
-        count = 0
-        for path in self.last_generated_files:
-            if os.path.exists(path):
-                try:
-                    os.remove(path)
-                    count += 1
-                except Exception as e:
-                    print(f"삭제 실패 ({path}): {e}")
-                    
-        self.last_generated_files.clear()
-        messagebox.showinfo("되돌리기 완료", f"{count}개의 파일이 안전하게 삭제되었습니다. 🗑️")
-
-if __name__ == "__main__":
-    try:
-        root = TkinterDnD.Tk()
-    except Exception as e:
-        print("tkinterdnd2 초기화 오류:", e)
-        root = tk.Tk()
-        
-    app = PivotFixerApp(root)
     root.mainloop()
