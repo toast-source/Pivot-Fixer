@@ -25,22 +25,25 @@ class PivotFixerApp:
         self.root.resizable(False, False)
         self.root.configure(bg=BG_COLOR)
 
-        # ttk 스타일 전역 설정
         self.setup_styles()
 
         self.root.drop_target_register(DND_FILES)
         self.root.dnd_bind('<<Drop>>', self.on_drop)
 
-        self.input_paths = []
+        # 파일 관리를 위한 리스트 딕셔너리 구조: {"id": 트리뷰_ID, "path": 절대경로, "name": 파일명, "checked": bool}
+        self.file_data = []
         self.preview_path = None
         self.output_dir = ""
         self.last_generated_files = [] 
 
-        # 설정 변수 (-10 ~ 10 지원)
+        # 설정 변수
         self.offset_y = tk.IntVar(value=0)
-        self.offset_x = tk.IntVar(value=0) # 새로 추가된 가로 이동 변수
+        self.offset_x = tk.IntVar(value=0)
         self.h_align = tk.BooleanVar(value=True)
+        
+        # 저장 방식 관련 변수
         self.overwrite = tk.BooleanVar(value=False)
+        self.save_mode = tk.StringVar(value="original") # "original" 또는 "single"
 
         self.tk_orig = None
         self.tk_res = None
@@ -68,6 +71,9 @@ class PivotFixerApp:
         style.configure("TCheckbutton", background=PANEL_BG, foreground=TEXT_COLOR, font=default_font)
         style.map("TCheckbutton", background=[("active", PANEL_BG)])
 
+        style.configure("TRadiobutton", background=PANEL_BG, foreground=TEXT_COLOR, font=default_font)
+        style.map("TRadiobutton", background=[("active", PANEL_BG)])
+
         style.configure("TCombobox", padding=5, font=default_font)
 
         style.configure("TButton", font=default_font, padding=6, background="#ffffff", borderwidth=1, bordercolor=BORDER_COLOR)
@@ -79,7 +85,9 @@ class PivotFixerApp:
         style.configure("Success.TButton", font=("Malgun Gothic", 12, "bold"), padding=10, background=SUCCESS_COLOR, foreground="white", borderwidth=0)
         style.map("Success.TButton", background=[("active", SUCCESS_HOVER)])
 
-        style.configure("TScrollbar", background="#e5e7eb", troughcolor=PANEL_BG, borderwidth=0, arrowsize=12)
+        style.configure("Treeview", font=default_font, rowheight=25, background="#f8fafc", fieldbackground="#f8fafc")
+        style.configure("Treeview.Heading", font=bold_font, background="#e5e7eb")
+        style.map("Treeview", background=[('selected', PRIMARY_COLOR)], foreground=[('selected', 'white')])
 
     def setup_ui(self):
         main_container = ttk.Frame(self.root, style="TFrame")
@@ -88,7 +96,7 @@ class PivotFixerApp:
         # ==========================================
         # 1단: 좌측 패널 (파일 목록)
         # ==========================================
-        frame_left = ttk.LabelFrame(main_container, text=" 📂 파일 목록 ", width=300)
+        frame_left = ttk.LabelFrame(main_container, text=" 📂 작업 파일 목록 ", width=300)
         frame_left.pack(side="left", fill="y", padx=(0, 10))
         frame_left.pack_propagate(False)
 
@@ -97,35 +105,34 @@ class PivotFixerApp:
         ttk.Button(frame_btns, text="파일/폴더 열기", command=self.load_files_dialog, style="Primary.TButton").pack(side="left", expand=True, fill="x", padx=(0, 5))
         ttk.Button(frame_btns, text="비우기", command=self.clear_list).pack(side="right", fill="x")
 
-        ttk.Label(frame_left, text="이곳으로 이미지를 드래그 앤 드롭 하세요.", style="Muted.TLabel").pack(pady=5)
+        # 체크박스 일괄 제어 버튼
+        frame_check_btns = ttk.Frame(frame_left, style="Panel.TFrame")
+        frame_check_btns.pack(fill="x", padx=10, pady=(0, 5))
+        ttk.Button(frame_check_btns, text="전체 선택", command=self.check_all).pack(side="left", expand=True, fill="x", padx=(0, 2))
+        ttk.Button(frame_check_btns, text="선택 해제", command=self.uncheck_all).pack(side="right", expand=True, fill="x", padx=(2, 0))
 
+        ttk.Label(frame_left, text="이미지를 목록으로 드래그 하세요.", style="Muted.TLabel").pack(pady=(0, 5))
+
+        # 트리뷰 (체크박스 및 목록 표시용)
         frame_list = ttk.Frame(frame_left, style="Panel.TFrame")
-        frame_list.pack(expand=True, fill="both", padx=10, pady=5)
+        frame_list.pack(expand=True, fill="both", padx=10, pady=(0, 5))
         
         scrollbar = ttk.Scrollbar(frame_list)
         scrollbar.pack(side="right", fill="y")
         
-        self.listbox = tk.Listbox(
-            frame_list, 
-            yscrollcommand=scrollbar.set, 
-            selectmode="single", 
-            font=("Malgun Gothic", 10),
-            bg="#f8fafc", 
-            fg=TEXT_COLOR, 
-            selectbackground=PRIMARY_COLOR, 
-            selectforeground="white",
-            relief="flat", 
-            highlightthickness=1, 
-            highlightbackground=BORDER_COLOR
-        )
-        self.listbox.pack(side="left", expand=True, fill="both")
-        scrollbar.config(command=self.listbox.yview)
+        self.tree = ttk.Treeview(frame_list, columns=("check", "name"), show="headings", yscrollcommand=scrollbar.set, selectmode="browse")
+        self.tree.heading("check", text="선택")
+        self.tree.column("check", width=40, anchor="center", stretch=False)
+        self.tree.heading("name", text="파일 이름 (더블클릭 수정)", anchor="w")
+        self.tree.column("name", anchor="w", stretch=True)
+        self.tree.pack(side="left", expand=True, fill="both")
+        scrollbar.config(command=self.tree.yview)
         
-        self.listbox.bind('<<ListboxSelect>>', self.on_list_select)
-        self.listbox.bind('<Double-Button-1>', self.on_list_double_click)
+        self.tree.bind('<ButtonRelease-1>', self.on_tree_click)
+        self.tree.bind('<<TreeviewSelect>>', self.on_tree_select)
+        self.tree.bind('<Double-Button-1>', self.on_tree_double_click)
 
-        ttk.Label(frame_left, text="💡 팁: 더블클릭하여 파일 이름을 바꿀 수 있습니다.", style="Muted.TLabel").pack(pady=(2, 5))
-        self.lbl_input_info = ttk.Label(frame_left, text="선택된 파일: 0개", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR)
+        self.lbl_input_info = ttk.Label(frame_left, text="선택됨: 0개 / 전체: 0개", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR)
         self.lbl_input_info.pack(pady=(5, 10))
 
         # ==========================================
@@ -139,10 +146,8 @@ class PivotFixerApp:
         lf_settings = ttk.LabelFrame(frame_mid, text=" ⚙️ 보정 설정 ")
         lf_settings.pack(fill="x", pady=(0, 10))
 
-        # 오프셋 범위 배열 (-10 ~ +10)
         offset_values = list(range(-10, 11))
 
-        # 세로 보정 설정
         frame_y = ttk.Frame(lf_settings, style="Panel.TFrame")
         frame_y.pack(fill="x", padx=15, pady=(15, 5))
         ttk.Label(frame_y, text="세로 이동 오프셋:").pack(side="left")
@@ -150,7 +155,6 @@ class PivotFixerApp:
         cb_y.pack(side="left", padx=10)
         cb_y.bind("<<ComboboxSelected>>", lambda e: self.update_preview())
 
-        # 가로 보정 설정
         frame_x = ttk.Frame(lf_settings, style="Panel.TFrame")
         frame_x.pack(fill="x", padx=15, pady=(0, 10))
         ttk.Label(frame_x, text="가로 이동 오프셋:").pack(side="left")
@@ -159,19 +163,29 @@ class PivotFixerApp:
         cb_x.bind("<<ComboboxSelected>>", lambda e: self.update_preview())
 
         ttk.Checkbutton(lf_settings, text="좌우 알파 Bbox 중앙 정렬 (자동 맞춤)", variable=self.h_align, command=self.update_preview).pack(anchor="w", padx=15, pady=(0, 10))
-        ttk.Label(lf_settings, text="* 캔버스 넓이는 원본의 약 2배로 자동 확장됩니다.", style="Muted.TLabel").pack(anchor="w", padx=15, pady=(0, 15))
+        ttk.Label(lf_settings, text="* 캔버스는 원본의 2배 정사각형으로 확장됩니다.", style="Muted.TLabel").pack(anchor="w", padx=15, pady=(0, 15))
 
-        # --- 2-2: 저장 및 처리 프레임 ---
-        lf_save = ttk.LabelFrame(frame_mid, text=" 💾 저장 및 처리 ")
+        # --- 2-2: 저장 방식 및 처리 프레임 ---
+        lf_save = ttk.LabelFrame(frame_mid, text=" 💾 저장 옵션 및 처리 ")
         lf_save.pack(fill="both", expand=True)
 
         ttk.Checkbutton(lf_save, text="원본 파일에 그대로 덮어쓰기 (!주의)", variable=self.overwrite, command=self.toggle_overwrite).pack(anchor="w", padx=15, pady=(15, 5))
 
-        self.btn_out_dir = ttk.Button(lf_save, text="📁 다른 저장 폴더 선택", command=self.select_output_dir)
-        self.btn_out_dir.pack(fill="x", padx=15, pady=(10, 5))
+        ttk.Separator(lf_save).pack(fill="x", padx=15, pady=5)
+
+        self.rb_orig = ttk.Radiobutton(lf_save, text="각 원본 파일이 있는 폴더에 각각 저장", variable=self.save_mode, value="original", command=self.toggle_save_mode)
+        self.rb_orig.pack(anchor="w", padx=15, pady=5)
+
+        self.rb_single = ttk.Radiobutton(lf_save, text="지정한 단일 폴더에 모두 모아서 저장", variable=self.save_mode, value="single", command=self.toggle_save_mode)
+        self.rb_single.pack(anchor="w", padx=15, pady=5)
+
+        self.btn_out_dir = ttk.Button(lf_save, text="📁 단일 저장 폴더 선택", command=self.select_output_dir)
+        self.btn_out_dir.pack(fill="x", padx=15, pady=(5, 5))
         
-        self.lbl_out_dir = ttk.Label(lf_save, text="기본값: 원본 폴더에 '_pivotfix' 추가", style="Muted.TLabel", wraplength=280)
-        self.lbl_out_dir.pack(padx=15, pady=(0, 15))
+        self.lbl_out_dir = ttk.Label(lf_save, text="[단일 저장 폴더 지정 안됨]", style="Muted.TLabel", wraplength=280)
+        self.lbl_out_dir.pack(padx=15, pady=(0, 5))
+        
+        self.toggle_save_mode() # 초기 상태 연동
 
         # 하단 액션 버튼
         frame_actions = ttk.Frame(lf_save, style="Panel.TFrame")
@@ -180,7 +194,7 @@ class PivotFixerApp:
         self.btn_undo = ttk.Button(frame_actions, text="↩ 마지막 작업 되돌리기", command=self.undo_batch)
         self.btn_undo.pack(fill="x", pady=(0, 10))
         
-        ttk.Button(frame_actions, text="▶ 처리 시작", style="Success.TButton", command=self.run_batch).pack(fill="x")
+        ttk.Button(frame_actions, text="▶ 선택된 파일 처리 시작", style="Success.TButton", command=self.run_batch).pack(fill="x")
 
         # ==========================================
         # 3단: 우측 패널 (미리보기)
@@ -219,17 +233,30 @@ class PivotFixerApp:
         canvas.tag_lower("checkerboard")
 
     def toggle_overwrite(self):
+        """덮어쓰기 여부에 따라 저장 옵션 라디오 버튼들 비활성화/활성화"""
         if self.overwrite.get():
+            self.rb_orig.state(['disabled'])
+            self.rb_single.state(['disabled'])
             self.btn_out_dir.state(['disabled'])
             self.btn_undo.state(['disabled'])
-            self.lbl_out_dir.config(text="원본 이미지 자체를 덮어씁니다.\n되돌릴 수 없으니 주의하세요!", foreground=DANGER_COLOR)
         else:
-            self.btn_out_dir.state(['!disabled'])
+            self.rb_orig.state(['!disabled'])
+            self.rb_single.state(['!disabled'])
             self.btn_undo.state(['!disabled'])
-            if self.output_dir:
-                self.lbl_out_dir.config(text=self.output_dir, foreground=TEXT_MUTED)
+            self.toggle_save_mode() # 라디오버튼 상태에 맞춰 단일 폴더 버튼 제어
+
+    def toggle_save_mode(self):
+        """저장 방식에 따라 단일 폴더 선택 버튼 활성화/비활성화"""
+        if not self.overwrite.get():
+            if self.save_mode.get() == "single":
+                self.btn_out_dir.state(['!disabled'])
             else:
-                self.lbl_out_dir.config(text="기본값: 원본 폴더에 '_pivotfix' 추가", foreground=TEXT_MUTED)
+                self.btn_out_dir.state(['disabled'])
+
+    def update_selection_info(self):
+        checked_count = sum(1 for f in self.file_data if f["checked"])
+        total_count = len(self.file_data)
+        self.lbl_input_info.config(text=f"선택됨: {checked_count}개 / 전체: {total_count}개")
 
     def load_files_dialog(self):
         paths = filedialog.askopenfilenames(filetypes=[("PNG Files", "*.png")])
@@ -253,65 +280,122 @@ class PivotFixerApp:
             messagebox.showwarning("안내", "PNG 파일이 발견되지 않았습니다.")
 
     def add_paths_to_list(self, new_paths):
+        first_new_id = None
         for p in new_paths:
             p_norm = os.path.normpath(p)
-            if p_norm not in [os.path.normpath(ip) for ip in self.input_paths]:
-                self.input_paths.append(p_norm)
-                self.listbox.insert(tk.END, os.path.basename(p_norm))
+            if not any(f["path"] == p_norm for f in self.file_data):
+                name = os.path.basename(p_norm)
+                item_id = self.tree.insert("", tk.END, values=("☑", name))
+                self.file_data.append({"id": item_id, "path": p_norm, "name": name, "checked": True})
+                if first_new_id is None:
+                    first_new_id = item_id
                 
-        self.lbl_input_info.config(text=f"선택된 파일: {len(self.input_paths)}개")
+        self.update_selection_info()
         
-        if self.input_paths and not self.preview_path:
-            self.listbox.selection_set(0)
-            self.preview_path = self.input_paths[0]
-            self.update_preview()
+        # 새 항목이 추가되었고 현재 미리보기가 없다면 첫번째 새 항목을 선택
+        if first_new_id and not self.preview_path:
+            self.tree.selection_set(first_new_id)
+            self.tree.focus(first_new_id)
+            for f in self.file_data:
+                if f["id"] == first_new_id:
+                    self.preview_path = f["path"]
+                    self.update_preview()
+                    break
 
-    def on_list_select(self, event):
-        selection = self.listbox.curselection()
+    def on_tree_click(self, event):
+        """체크박스 열 클릭 시 상태 토글"""
+        region = self.tree.identify_region(event.x, event.y)
+        column = self.tree.identify_column(event.x)
+        
+        if region == "cell" and column == "#1": # 첫 번째 열(체크박스)
+            item_id = self.tree.identify_row(event.y)
+            if item_id:
+                for f in self.file_data:
+                    if f["id"] == item_id:
+                        f["checked"] = not f["checked"]
+                        check_str = "☑" if f["checked"] else "☐"
+                        self.tree.item(item_id, values=(check_str, f["name"]))
+                        self.update_selection_info()
+                        break
+
+    def on_tree_select(self, event):
+        selection = self.tree.selection()
         if selection:
-            idx = selection[0]
-            self.preview_path = self.input_paths[idx]
-            self.update_preview()
+            item_id = selection[0]
+            for f in self.file_data:
+                if f["id"] == item_id:
+                    self.preview_path = f["path"]
+                    self.update_preview()
+                    break
 
-    def on_list_double_click(self, event):
-        selection = self.listbox.curselection()
-        if not selection: return
+    def on_tree_double_click(self, event):
+        """이름 열 더블클릭 시 이름 변경"""
+        region = self.tree.identify_region(event.x, event.y)
+        column = self.tree.identify_column(event.x)
         
-        idx = selection[0]
-        old_path = self.input_paths[idx]
-        old_dir = os.path.dirname(old_path)
-        old_name = os.path.basename(old_path)
-        
-        new_name = simpledialog.askstring("이름 변경", "새 파일 이름을 입력하세요:", initialvalue=old_name, parent=self.root)
-        
-        if new_name and new_name != old_name:
-            if not new_name.lower().endswith(".png"):
-                new_name += ".png"
-                
-            new_path = os.path.join(old_dir, new_name)
+        if region == "cell" and column == "#2": # 두 번째 열(이름)
+            item_id = self.tree.identify_row(event.y)
+            if not item_id: return
             
-            if os.path.exists(new_path):
-                messagebox.showerror("오류", "동일한 이름을 가진 파일이 이미 존재합니다.")
-                return
-                
-            try:
-                os.rename(old_path, new_path)
-                self.input_paths[idx] = new_path
-                self.listbox.delete(idx)
-                self.listbox.insert(idx, new_name)
-                self.listbox.selection_set(idx)
-                
-                if self.preview_path == old_path:
-                    self.preview_path = new_path
+            target_f = None
+            for f in self.file_data:
+                if f["id"] == item_id:
+                    target_f = f
+                    break
                     
-            except Exception as e:
-                messagebox.showerror("오류", f"이름 변경 실패: {e}")
+            if not target_f: return
+            
+            old_path = target_f["path"]
+            old_dir = os.path.dirname(old_path)
+            old_name = target_f["name"]
+            
+            new_name = simpledialog.askstring("이름 변경", "새 파일 이름을 입력하세요:", initialvalue=old_name, parent=self.root)
+            
+            if new_name and new_name != old_name:
+                if not new_name.lower().endswith(".png"):
+                    new_name += ".png"
+                    
+                new_path = os.path.join(old_dir, new_name)
+                
+                if os.path.exists(new_path):
+                    messagebox.showerror("오류", "동일한 이름을 가진 파일이 이미 존재합니다.")
+                    return
+                    
+                try:
+                    os.rename(old_path, new_path)
+                    
+                    # 내부 데이터 및 트리뷰 업데이트
+                    target_f["path"] = new_path
+                    target_f["name"] = new_name
+                    check_str = "☑" if target_f["checked"] else "☐"
+                    self.tree.item(item_id, values=(check_str, new_name))
+                    
+                    if self.preview_path == old_path:
+                        self.preview_path = new_path
+                        
+                except Exception as e:
+                    messagebox.showerror("오류", f"이름 변경 실패: {e}")
+
+    def check_all(self):
+        for f in self.file_data:
+            if not f["checked"]:
+                f["checked"] = True
+                self.tree.item(f["id"], values=("☑", f["name"]))
+        self.update_selection_info()
+
+    def uncheck_all(self):
+        for f in self.file_data:
+            if f["checked"]:
+                f["checked"] = False
+                self.tree.item(f["id"], values=("☐", f["name"]))
+        self.update_selection_info()
 
     def clear_list(self):
-        self.input_paths.clear()
-        self.listbox.delete(0, tk.END)
+        self.file_data.clear()
+        for item in self.tree.get_children():
+            self.tree.delete(item)
         self.preview_path = None
-        self.lbl_input_info.config(text="선택된 파일: 0개")
+        self.update_selection_info()
         self.canvas_orig.delete("preview_image")
         self.canvas_res.delete("preview_image")
         self.canvas_res.delete("crosshair")
@@ -321,9 +405,7 @@ class PivotFixerApp:
         if folder_path:
             self.output_dir = folder_path
             self.lbl_out_dir.config(text=folder_path, foreground=PRIMARY_COLOR)
-        else:
-            self.output_dir = ""
-            self.lbl_out_dir.config(text="기본값: 원본 폴더에 '_pivotfix' 추가", foreground=TEXT_MUTED)
+            self.save_mode.set("single") # 경로를 선택하면 자동으로 단일 폴더 모드로 변경
 
     def get_alpha_bbox(self, img):
         if img.mode != "RGBA":
@@ -342,38 +424,30 @@ class PivotFixerApp:
         else:
             left, upper, right, lower = bbox
 
-        # 가로(X) 배치 기준: h_align 활성화 시 알파 Bounding Box 중앙, 아닐 시 캔버스 중앙
-        # offset_x: 음수(-)면 왼쪽, 양수(+)면 오른쪽
         if h_align:
             cx_visible = (left + right) // 2
             rel_x = -cx_visible + offset_x
         else:
             rel_x = -(W // 2) + offset_x
 
-        # 세로(Y) 배치 기준: 하단(lower) 픽셀이 피봇 중앙선 바로 위에 얹히도록
-        # 직관성 반영: 음수(-) 입력 시 이미지가 아래로 내려감, 양수(+) 입력 시 위로 올라감
         rel_y = -lower - offset_y
 
-        # 이미지가 절대 잘리지 않기 위해 십자선 기준 상하좌우로 필요한 최소 공간 계산
         min_half_w = max(-rel_x, rel_x + W)
         min_half_h = max(-rel_y, rel_y + H)
 
         nW = min_half_w * 2
         nH = min_half_h * 2
 
-        # 기본적으로 원본의 2배 크기는 유지 (최소 여백 보장)
         base_nW = (W * 2) if (W * 2) % 2 == 0 else (W * 2) + 1
         base_nH = (H * 2) if (H * 2) % 2 == 0 else (H * 2) + 1
 
         nW = max(nW, base_nW)
         nH = max(nH, base_nH)
 
-        # 캔버스를 항상 정사각형으로 강제 (가장 긴 변 기준)
         max_size = max(nW, nH)
         nW = max_size
         nH = max_size
 
-        # 짝수 강제 (0.5px 오차 방지)
         if nW % 2 != 0: nW += 1
         if nH % 2 != 0: nH += 1
 
@@ -411,7 +485,6 @@ class PivotFixerApp:
             self.tk_orig = ImageTk.PhotoImage(img_preview)
             self.canvas_orig.create_image(110, 225, image=self.tk_orig, anchor="center", tags="preview_image")
 
-            # 원본 이미지의 Bounding Box (크기) 계산 및 그리기
             orig_w, orig_h = img_preview.width, img_preview.height
             orig_x1 = 110 - (orig_w // 2)
             orig_y1 = 225 - (orig_h // 2)
@@ -423,7 +496,6 @@ class PivotFixerApp:
             self.tk_res = ImageTk.PhotoImage(res_preview)
             self.canvas_res.create_image(110, 225, image=self.tk_res, anchor="center", tags="preview_image")
 
-            # 최종 보정된 이미지의 Bounding Box (크기) 계산 및 그리기
             res_w, res_h = res_preview.width, res_preview.height
             res_x1 = 110 - (res_w // 2)
             res_y1 = 225 - (res_h // 2)
@@ -438,15 +510,22 @@ class PivotFixerApp:
             print(f"미리보기 업데이트 실패: {e}")
 
     def run_batch(self):
-        if not self.input_paths:
-            messagebox.showwarning("안내", "먼저 이미지를 추가해주세요.")
+        # 체크된 파일들만 모아서 처리 타겟으로 지정
+        target_files = [f for f in self.file_data if f["checked"]]
+        
+        if not target_files:
+            messagebox.showwarning("안내", "체크된(선택된) 파일이 없습니다.\n처리할 파일을 목록에서 체크해주세요.")
             return
 
         is_overwrite = self.overwrite.get()
+        save_mode_val = self.save_mode.get()
         
         if is_overwrite:
-            ans = messagebox.askyesno("경고", "원본 파일 자체를 덮어씁니다.\n이 작업은 되돌리기로 복구할 수 없습니다.\n\n정말로 진행하시겠습니까?")
+            ans = messagebox.askyesno("경고", f"체크된 {len(target_files)}개 원본 파일 자체를 덮어씁니다.\n이 작업은 되돌리기로 복구할 수 없습니다.\n\n정말로 진행하시겠습니까?")
             if not ans: return
+        elif save_mode_val == "single" and not self.output_dir:
+            messagebox.showwarning("안내", "단일 폴더 저장 모드가 선택되었지만, 저장할 폴더가 지정되지 않았습니다.\n폴더를 먼저 선택해주세요.")
+            return
 
         success_count = 0
         h_align_val = self.h_align.get()
@@ -455,12 +534,13 @@ class PivotFixerApp:
 
         self.last_generated_files.clear()
 
-        for idx, path in enumerate(self.input_paths):
+        for idx, file_info in enumerate(target_files):
+            path = file_info["path"]
             try:
                 img = Image.open(path)
                 res_img = self.process_image(img, offset_y_val, offset_x_val, h_align_val)
                 
-                img.close()
+                img.close() # 원본 이미지 닫기 (덮어쓰기를 위해)
                 
                 if is_overwrite:
                     save_path = path
@@ -468,7 +548,13 @@ class PivotFixerApp:
                     basename = os.path.basename(path)
                     name, ext = os.path.splitext(basename)
                     new_filename = f"{name}_pivotfix.png"
-                    save_dir = self.output_dir if self.output_dir else os.path.dirname(path)
+                    
+                    # 저장 모드에 따라 경로 분기
+                    if save_mode_val == "single":
+                        save_dir = self.output_dir
+                    else: # "original"
+                        save_dir = os.path.dirname(path)
+                        
                     save_path = os.path.join(save_dir, new_filename)
                     self.last_generated_files.append(save_path) 
                 
@@ -483,7 +569,7 @@ class PivotFixerApp:
         if is_overwrite:
             messagebox.showinfo("처리 완료", f"총 {success_count}개의 파일 덮어쓰기가 완료되었습니다! 🎉")
         else:
-            messagebox.showinfo("처리 완료", f"총 {len(self.input_paths)}개 중 {success_count}개 파일의 보정 생성이 완료되었습니다! 🎉")
+            messagebox.showinfo("처리 완료", f"선택된 {len(target_files)}개 중 {success_count}개 파일의 보정 생성이 완료되었습니다! 🎉")
 
     def undo_batch(self):
         if self.overwrite.get():
@@ -514,7 +600,6 @@ if __name__ == "__main__":
         root = TkinterDnD.Tk()
     except Exception as e:
         print("tkinterdnd2 초기화 오류:", e)
-        print("requirements.txt의 패키지가 정상적으로 설치되었는지 확인해주세요.")
         root = tk.Tk()
         
     app = PivotFixerApp(root)
