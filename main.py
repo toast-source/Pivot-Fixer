@@ -208,8 +208,8 @@ class PivotFixerApp:
         self.lbl_input_info = ttk.Label(lf_list, text="선택됨: 0개 / 전체: 0개", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR)
         self.lbl_input_info.pack(pady=(5, 10))
 
-        # 2-2: 저장 옵션 및 처리 버튼 (파일 목록 밑으로 이동)
-        lf_save = ttk.LabelFrame(frame_left, text=" 💾 저장 옵션 및 처리 ")
+        # 2-2: 저장 옵션 (파일 목록 밑으로 이동)
+        lf_save = ttk.LabelFrame(frame_left, text=" 💾 저장 옵션 ")
         lf_save.pack(fill="x")
 
         ttk.Checkbutton(lf_save, text="원본 파일에 덮어쓰기 (!주의)", variable=self.overwrite, command=self.toggle_overwrite).pack(anchor="w", padx=10, pady=(10, 5))
@@ -229,13 +229,6 @@ class PivotFixerApp:
         self.lbl_out_dir.pack(side="left", padx=10, fill="x", expand=True)
         
         self.toggle_save_mode() 
-
-        frame_actions = ttk.Frame(lf_save, style="Panel.TFrame")
-        frame_actions.pack(fill="x", padx=10, pady=(10, 10))
-        
-        self.btn_undo = ttk.Button(frame_actions, text="↩ 되돌리기", command=self.undo_batch)
-        self.btn_undo.pack(side="left", expand=True, fill="x", padx=(0, 5))
-        ttk.Button(frame_actions, text="▶ 처리 시작", style="Success.TButton", command=self.run_batch).pack(side="left", expand=True, fill="x", padx=(5, 0))
 
         # --- 하단 우측 (실시간 미리보기) ---
         frame_right = ttk.LabelFrame(self.paned_main, text=" 👁️ 실시간 미리보기 (반응형) ")
