@@ -171,7 +171,29 @@ class PivotFixerApp:
         frame_left = ttk.Frame(self.paned_main, style="TFrame")
         self.paned_main.add(frame_left, weight=1)
 
-        # 2-1: 파일 목록
+        # 2-1: 저장 옵션 (파일 목록 위로 배치)
+        lf_save = ttk.LabelFrame(frame_left, text=" 💾 저장 옵션 ")
+        lf_save.pack(fill="x", pady=(0, 10))
+
+        ttk.Checkbutton(lf_save, text="원본 파일에 덮어쓰기 (!주의)", variable=self.overwrite, command=self.toggle_overwrite).pack(anchor="w", padx=10, pady=(10, 5))
+        
+        frame_save_mode = ttk.Frame(lf_save, style="Panel.TFrame")
+        frame_save_mode.pack(fill="x", padx=10, pady=5)
+        self.rb_orig = ttk.Radiobutton(frame_save_mode, text="각 원본 폴더 저장", variable=self.save_mode, value="original", command=self.toggle_save_mode)
+        self.rb_orig.pack(side="left", padx=(0, 10))
+        self.rb_single = ttk.Radiobutton(frame_save_mode, text="단일 폴더 취합", variable=self.save_mode, value="single", command=self.toggle_save_mode)
+        self.rb_single.pack(side="left")
+
+        frame_dir = ttk.Frame(lf_save, style="Panel.TFrame")
+        frame_dir.pack(fill="x", padx=10, pady=5)
+        self.btn_out_dir = ttk.Button(frame_dir, text="📁 폴더 선택", command=self.select_output_dir)
+        self.btn_out_dir.pack(side="left")
+        self.lbl_out_dir = ttk.Label(frame_dir, text="[미지정]", style="Muted.TLabel")
+        self.lbl_out_dir.pack(side="left", padx=10, fill="x", expand=True)
+        
+        self.toggle_save_mode() 
+
+        # 2-2: 파일 목록
         lf_list = ttk.LabelFrame(frame_left, text=" 📂 작업 파일 목록 ")
         lf_list.pack(fill="both", expand=True, pady=(0, 10))
 
@@ -206,29 +228,7 @@ class PivotFixerApp:
         self.tree.bind('<Double-Button-1>', self.on_tree_double_click)
 
         self.lbl_input_info = ttk.Label(lf_list, text="선택됨: 0개 / 전체: 0개", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR)
-        self.lbl_input_info.pack(pady=(5, 10))
-
-        # 2-2: 저장 옵션 (파일 목록 밑으로 이동)
-        lf_save = ttk.LabelFrame(frame_left, text=" 💾 저장 옵션 ")
-        lf_save.pack(fill="x")
-
-        ttk.Checkbutton(lf_save, text="원본 파일에 덮어쓰기 (!주의)", variable=self.overwrite, command=self.toggle_overwrite).pack(anchor="w", padx=10, pady=(10, 5))
-        
-        frame_save_mode = ttk.Frame(lf_save, style="Panel.TFrame")
-        frame_save_mode.pack(fill="x", padx=10, pady=5)
-        self.rb_orig = ttk.Radiobutton(frame_save_mode, text="각 원본 폴더 저장", variable=self.save_mode, value="original", command=self.toggle_save_mode)
-        self.rb_orig.pack(side="left", padx=(0, 10))
-        self.rb_single = ttk.Radiobutton(frame_save_mode, text="단일 폴더 취합", variable=self.save_mode, value="single", command=self.toggle_save_mode)
-        self.rb_single.pack(side="left")
-
-        frame_dir = ttk.Frame(lf_save, style="Panel.TFrame")
-        frame_dir.pack(fill="x", padx=10, pady=5)
-        self.btn_out_dir = ttk.Button(frame_dir, text="📁 폴더 선택", command=self.select_output_dir)
-        self.btn_out_dir.pack(side="left")
-        self.lbl_out_dir = ttk.Label(frame_dir, text="[미지정]", style="Muted.TLabel")
-        self.lbl_out_dir.pack(side="left", padx=10, fill="x", expand=True)
-        
-        self.toggle_save_mode() 
+        self.lbl_input_info.pack(pady=(5, 10)) 
 
         # --- 하단 우측 (실시간 미리보기) ---
         frame_right = ttk.LabelFrame(self.paned_main, text=" 👁️ 실시간 미리보기 (반응형) ")
