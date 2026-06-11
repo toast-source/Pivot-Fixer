@@ -22,9 +22,9 @@ class PivotFixerApp:
         self.root = root
         self.root.title("PNG 피봇 보정 툴 (Pixel Art Optimizer)")
         
-        # 반응형 창 크기 조절 허용
-        self.root.geometry("1300x750")
-        self.root.minsize(1100, 650)
+        # 텍스트 잘림을 방지하고 미리보기를 넓게 주기 위해 초기 가로 너비를 더 넓게 확보 (1400x750)
+        self.root.geometry("1400x750")
+        self.root.minsize(1200, 650)
         self.root.resizable(True, True)
         self.root.configure(bg=BG_COLOR)
 
@@ -51,7 +51,7 @@ class PivotFixerApp:
         self.flip_h = tk.BooleanVar(value=False)
         self.flip_v = tk.BooleanVar(value=False)
         self.rotate_angle = tk.StringVar(value="0도 (회전 없음)")
-        self.transform_order = tk.StringVar(value="before") # before: 변환 후 피봇보정, after: 피봇보정 후 변환
+        self.transform_order = tk.StringVar(value="before")
 
         self.tk_orig = None
         self.tk_res = None
@@ -99,15 +99,15 @@ class PivotFixerApp:
         style.map("Treeview", background=[('selected', PRIMARY_COLOR)], foreground=[('selected', 'white')])
 
     def setup_ui(self):
-        # PanedWindow를 사용하여 사용자가 구역 넓이를 직접 드래그로 조절 가능하게 만듦
         self.paned_main = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         self.paned_main.pack(fill="both", expand=True, padx=10, pady=10)
 
         # ==========================================
         # 1단: 좌측 패널 (파일 목록)
         # ==========================================
+        # 파일 목록 영역은 너무 넓을 필요가 없으므로 고정 느낌의 가중치(1) 부여
         frame_left = ttk.LabelFrame(self.paned_main, text=" 📂 작업 파일 목록 ")
-        self.paned_main.add(frame_left, weight=1) # weight 설정으로 리사이즈 비율 결정
+        self.paned_main.add(frame_left, weight=1)
 
         frame_btns = ttk.Frame(frame_left, style="Panel.TFrame")
         frame_btns.pack(fill="x", padx=10, pady=(10, 5))
@@ -143,12 +143,12 @@ class PivotFixerApp:
         self.lbl_input_info.pack(pady=(5, 10))
 
         # ==========================================
-        # 2단: 중앙 패널 (설정 및 처리) - 스크롤 캔버스 적용
+        # 2단: 중앙 패널 (설정 및 처리) - 넓이 확장 및 스크롤 최적화
         # ==========================================
+        # 텍스트 잘림 현상을 방지하기 위해 weight=2 로 설정하여 좌측보다 넓게 초기 할당
         frame_mid_container = ttk.LabelFrame(self.paned_main, text=" ⚙️ 보정 및 변환 설정 ")
-        self.paned_main.add(frame_mid_container, weight=1)
+        self.paned_main.add(frame_mid_container, weight=2)
 
-        # 설정 메뉴가 많아지므로 스크롤 가능한 프레임으로 구성
         mid_canvas = tk.Canvas(frame_mid_container, bg=PANEL_BG, highlightthickness=0)
         mid_scrollbar = ttk.Scrollbar(frame_mid_container, orient="vertical", command=mid_canvas.yview)
         frame_mid = ttk.Frame(mid_canvas, style="Panel.TFrame")
@@ -161,18 +161,19 @@ class PivotFixerApp:
         mid_scrollbar.pack(side="right", fill="y")
         mid_canvas.configure(yscrollcommand=mid_scrollbar.set)
 
-        # --- 2-1: 이미지 변환 설정 프레임 (NEW) ---
+        # --- 2-1: 이미지 변환 설정 프레임 ---
         lf_transform = ttk.LabelFrame(frame_mid, text=" 🔄 이미지 변환 (회전/반전) ")
         lf_transform.pack(fill="x", padx=10, pady=(10, 10))
 
-        ttk.Label(lf_transform, text="변환 적용 시점:").pack(anchor="w", padx=15, pady=(10, 5))
-        ttk.Radiobutton(lf_transform, text="이미지 먼저 변환 후 → 피봇 중앙 보정 (추천)", variable=self.transform_order, value="before", command=self.update_preview).pack(anchor="w", padx=25, pady=2)
-        ttk.Radiobutton(lf_transform, text="피봇 먼저 중앙 보정 후 → 캔버스 전체 변환", variable=self.transform_order, value="after", command=self.update_preview).pack(anchor="w", padx=25, pady=(2, 10))
+        ttk.Label(lf_transform, text="변환 적용 시점:").pack(anchor="w", padx=10, pady=(10, 5))
+        # 텍스트가 잘리지 않도록 폰트 크기를 유지하되 패딩 간격을 최적화
+        ttk.Radiobutton(lf_transform, text="이미지 먼저 변환 후 → 피봇 보정 (추천)", variable=self.transform_order, value="before", command=self.update_preview).pack(anchor="w", padx=20, pady=2)
+        ttk.Radiobutton(lf_transform, text="피봇 먼저 보정 후 → 캔버스 전체 변환", variable=self.transform_order, value="after", command=self.update_preview).pack(anchor="w", padx=20, pady=(2, 10))
 
         frame_flips = ttk.Frame(lf_transform, style="Panel.TFrame")
         frame_flips.pack(fill="x", padx=15, pady=5)
-        ttk.Checkbutton(frame_flips, text="좌우 반전 (가로 뒤집기)", variable=self.flip_h, command=self.update_preview).pack(side="left", padx=(0, 15))
-        ttk.Checkbutton(frame_flips, text="상하 반전 (세로 뒤집기)", variable=self.flip_v, command=self.update_preview).pack(side="left")
+        ttk.Checkbutton(frame_flips, text="가로 뒤집기", variable=self.flip_h, command=self.update_preview).pack(side="left", padx=(0, 20))
+        ttk.Checkbutton(frame_flips, text="세로 뒤집기", variable=self.flip_v, command=self.update_preview).pack(side="left")
 
         frame_rot = ttk.Frame(lf_transform, style="Panel.TFrame")
         frame_rot.pack(fill="x", padx=15, pady=(5, 15))
@@ -202,22 +203,25 @@ class PivotFixerApp:
         cb_x.pack(side="left", padx=10)
         cb_x.bind("<<ComboboxSelected>>", lambda e: self.update_preview())
 
-        ttk.Checkbutton(lf_pivot, text="좌우 알파 Bbox 중앙 정렬 (자동 맞춤)", variable=self.h_align, command=self.update_preview).pack(anchor="w", padx=15, pady=(0, 15))
+        ttk.Checkbutton(lf_pivot, text="좌우 알파 Bbox 중앙 정렬 (자동 맞춤)", variable=self.h_align, command=self.update_preview).pack(anchor="w", padx=15, pady=(0, 5))
+        ttk.Label(lf_pivot, text="* 캔버스는 원본의 2배 정사각형으로 확장됩니다.", style="Muted.TLabel").pack(anchor="w", padx=15, pady=(0, 15))
 
         # --- 2-3: 저장 옵션 프레임 ---
         lf_save = ttk.LabelFrame(frame_mid, text=" 💾 저장 옵션 ")
         lf_save.pack(fill="x", padx=10, pady=(0, 10))
 
-        ttk.Checkbutton(lf_save, text="원본 파일에 그대로 덮어쓰기 (!주의)", variable=self.overwrite, command=self.toggle_overwrite).pack(anchor="w", padx=15, pady=(15, 5))
+        ttk.Checkbutton(lf_save, text="원본 파일에 덮어쓰기 (!주의)", variable=self.overwrite, command=self.toggle_overwrite).pack(anchor="w", padx=15, pady=(15, 5))
         ttk.Separator(lf_save).pack(fill="x", padx=15, pady=5)
-        self.rb_orig = ttk.Radiobutton(lf_save, text="각 원본 파일이 있는 폴더에 각각 저장", variable=self.save_mode, value="original", command=self.toggle_save_mode)
+        
+        # 텍스트 길이를 최적화하여 좁은 창에서도 잘리지 않도록 함
+        self.rb_orig = ttk.Radiobutton(lf_save, text="각 원본 폴더에 '_pivotfix' 추가", variable=self.save_mode, value="original", command=self.toggle_save_mode)
         self.rb_orig.pack(anchor="w", padx=15, pady=5)
-        self.rb_single = ttk.Radiobutton(lf_save, text="지정한 단일 폴더에 모두 모아서 저장", variable=self.save_mode, value="single", command=self.toggle_save_mode)
+        self.rb_single = ttk.Radiobutton(lf_save, text="지정한 단일 폴더에 모두 저장", variable=self.save_mode, value="single", command=self.toggle_save_mode)
         self.rb_single.pack(anchor="w", padx=15, pady=5)
 
         self.btn_out_dir = ttk.Button(lf_save, text="📁 단일 저장 폴더 선택", command=self.select_output_dir)
         self.btn_out_dir.pack(fill="x", padx=15, pady=(5, 5))
-        self.lbl_out_dir = ttk.Label(lf_save, text="[단일 저장 폴더 지정 안됨]", style="Muted.TLabel", wraplength=280)
+        self.lbl_out_dir = ttk.Label(lf_save, text="[폴더 미지정]", style="Muted.TLabel", wraplength=300)
         self.lbl_out_dir.pack(padx=15, pady=(0, 15))
         
         self.toggle_save_mode() 
@@ -231,10 +235,11 @@ class PivotFixerApp:
         ttk.Button(frame_actions, text="▶ 선택된 파일 처리 시작", style="Success.TButton", command=self.run_batch).pack(fill="x")
 
         # ==========================================
-        # 3단: 우측 패널 (미리보기 - 반응형)
+        # 3단: 우측 패널 (미리보기 - 반응형 최적화)
         # ==========================================
+        # 미리보기 패널에 가장 높은 가중치(4)를 주어 창을 키우면 주로 이 영역이 늘어나도록 하고, 찌그러짐을 방지함
         frame_right = ttk.LabelFrame(self.paned_main, text=" 👁️ 실시간 미리보기 (반응형) ")
-        self.paned_main.add(frame_right, weight=3) # 미리보기 영역이 가장 많이 늘어나게 설정
+        self.paned_main.add(frame_right, weight=4)
 
         frame_right_lbls = ttk.Frame(frame_right, style="Panel.TFrame")
         frame_right_lbls.pack(fill="x", padx=10, pady=(10, 5))
@@ -243,27 +248,32 @@ class PivotFixerApp:
         ttk.Label(frame_right_lbls, text="[ 변환 및 보정 완료 ]", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR).pack(side="left", expand=True)
 
         self.frame_canvases = ttk.Frame(frame_right, style="Panel.TFrame")
+        # fill="both", expand=True 옵션으로 프레임이 부모 크기에 맞춰 상하좌우로 꽉 차게 됨
         self.frame_canvases.pack(expand=True, fill="both", padx=10, pady=(0, 10))
         
-        # 캔버스가 동적으로 리사이즈 되도록 expand=True 적용
-        self.canvas_orig = tk.Canvas(self.frame_canvases, bg="#ffffff", relief="solid", bd=1, highlightthickness=0)
+        canvas_bg = "#ffffff"
+        canvas_bd = 1
+        canvas_relief = "solid"
+        
+        # 캔버스 두 개를 나란히 배치. expand=True, fill="both" 로 종횡비를 화면에 맞춤.
+        self.canvas_orig = tk.Canvas(self.frame_canvases, bg=canvas_bg, relief=canvas_relief, bd=canvas_bd, highlightthickness=0)
         self.canvas_orig.pack(side="left", expand=True, fill="both", padx=(0, 5))
 
-        self.canvas_res = tk.Canvas(self.frame_canvases, bg="#ffffff", relief="solid", bd=1, highlightthickness=0)
+        self.canvas_res = tk.Canvas(self.frame_canvases, bg=canvas_bg, relief=canvas_relief, bd=canvas_bd, highlightthickness=0)
         self.canvas_res.pack(side="left", expand=True, fill="both", padx=(5, 0))
 
-        # 캔버스 크기가 변할 때마다 미리보기를 다시 그리도록 이벤트 바인딩
         self.frame_canvases.bind("<Configure>", self.on_canvas_resize)
 
     # ------------------ 기능 메서드 ------------------
 
     def on_canvas_resize(self, event):
-        """창 크기가 변할 때 불필요한 연산 방지를 위해 디바운싱 처리 후 렌더링"""
         if self._resize_timer:
             self.root.after_cancel(self._resize_timer)
         self._resize_timer = self.root.after(100, self.update_preview)
 
     def draw_checkerboard(self, canvas, width, height, size=10):
+        # 최적화: 이전에 그려진 체커보드를 삭제
+        canvas.delete("checkerboard")
         for y in range(0, height, size):
             for x in range(0, width, size):
                 color = "#ffffff" if ((x//size) + (y//size)) % 2 == 0 else "#f1f5f9"
@@ -276,6 +286,7 @@ class PivotFixerApp:
             self.rb_single.state(['disabled'])
             self.btn_out_dir.state(['disabled'])
             self.btn_undo.state(['disabled'])
+            self.lbl_out_dir.config(text="원본 파일에 덮어씁니다.\n되돌릴 수 없으니 주의하세요!", foreground=DANGER_COLOR)
         else:
             self.rb_orig.state(['!disabled'])
             self.rb_single.state(['!disabled'])
@@ -286,8 +297,13 @@ class PivotFixerApp:
         if not self.overwrite.get():
             if self.save_mode.get() == "single":
                 self.btn_out_dir.state(['!disabled'])
+                if self.output_dir:
+                    self.lbl_out_dir.config(text=self.output_dir, foreground=PRIMARY_COLOR)
+                else:
+                    self.lbl_out_dir.config(text="[폴더 미지정]", foreground=TEXT_MUTED)
             else:
                 self.btn_out_dir.state(['disabled'])
+                self.lbl_out_dir.config(text="기본값: 원본 폴더에 '_pivotfix' 추가", foreground=TEXT_MUTED)
 
     def update_selection_info(self):
         checked_count = sum(1 for f in self.file_data if f["checked"])
@@ -403,6 +419,7 @@ class PivotFixerApp:
                     
                     if self.preview_path == old_path:
                         self.preview_path = new_path
+                        self.update_preview()
                         
                 except Exception as e:
                     messagebox.showerror("오류", f"이름 변경 실패: {e}")
@@ -546,9 +563,11 @@ class PivotFixerApp:
             order = self.transform_order.get()
             res_img = self.process_image(img, self.offset_y.get(), self.offset_x.get(), self.h_align.get(), order)
 
-            # 캔버스 크기에 맞춰 유동적으로 최대 안전 스케일 영역 계산 (패딩 20px)
-            safe_w = c_w - 20
-            safe_h = c_h - 20
+            # 패딩 40을 주어 여백을 남기고 스케일링 (가로세로 비율 최적화)
+            safe_w = c_w - 40
+            safe_h = c_h - 40
+            if safe_w < 10 or safe_h < 10: return
+            
             cx = c_w // 2
             cy = c_h // 2
 
