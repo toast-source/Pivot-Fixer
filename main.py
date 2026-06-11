@@ -237,8 +237,19 @@ class PivotFixerApp:
         frame_right_lbls = ttk.Frame(frame_right, style="Panel.TFrame")
         frame_right_lbls.pack(fill="x", padx=10, pady=(10, 5))
         
-        ttk.Label(frame_right_lbls, text="[ 원본 캔버스 ]", font=("Malgun Gothic", 10, "bold")).pack(side="left", expand=True)
-        ttk.Label(frame_right_lbls, text="[ 변환 및 보정 완료 ]", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR).pack(side="left", expand=True)
+        # 원본 제목 및 사이즈 프레임
+        frame_orig_title = ttk.Frame(frame_right_lbls, style="Panel.TFrame")
+        frame_orig_title.pack(side="left", expand=True)
+        ttk.Label(frame_orig_title, text="[ 원본 캔버스 ]", font=("Malgun Gothic", 10, "bold")).pack(side="top")
+        self.lbl_orig_dim = ttk.Label(frame_orig_title, text="(0 x 0 px)", style="Muted.TLabel")
+        self.lbl_orig_dim.pack(side="top")
+
+        # 결과 제목 및 사이즈 프레임
+        frame_res_title = ttk.Frame(frame_right_lbls, style="Panel.TFrame")
+        frame_res_title.pack(side="left", expand=True)
+        ttk.Label(frame_res_title, text="[ 변환 및 보정 완료 ]", font=("Malgun Gothic", 10, "bold"), foreground=PRIMARY_COLOR).pack(side="top")
+        self.lbl_res_dim = ttk.Label(frame_res_title, text="(0 x 0 px)", style="Muted.TLabel")
+        self.lbl_res_dim.pack(side="top")
 
         self.frame_canvases = ttk.Frame(frame_right, style="Panel.TFrame")
         self.frame_canvases.pack(expand=True, fill="both", padx=10, pady=(0, 10))
@@ -420,6 +431,8 @@ class PivotFixerApp:
         self.update_selection_info()
         self.canvas_orig.delete("all")
         self.canvas_res.delete("all")
+        self.lbl_orig_dim.config(text="(0 x 0 px)")
+        self.lbl_res_dim.config(text="(0 x 0 px)")
 
     def select_output_dir(self):
         folder_path = filedialog.askdirectory()
@@ -532,6 +545,10 @@ class PivotFixerApp:
             img = Image.open(self.preview_path).convert("RGBA")
             order = self.transform_order.get()
             res_img = self.process_image(img, self.offset_y.get(), self.offset_x.get(), self.h_align.get(), order)
+
+            # 해상도 라벨 업데이트
+            self.lbl_orig_dim.config(text=f"({img.width} x {img.height} px)")
+            self.lbl_res_dim.config(text=f"({res_img.width} x {res_img.height} px)")
 
             safe_w = c_w - 40
             safe_h = c_h - 40
