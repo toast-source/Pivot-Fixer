@@ -20,7 +20,7 @@ BORDER_COLOR = "#E2E8F0"
 class PivotFixerApp:
     def __init__(self, root):
         self.root = root
-        self.version = "v0.1.6"
+        self.version = "v0.1.7"
         self.root.title(f"PNG 피봇 보정 툴 (Pixel Art Optimizer) - {self.version}")
 
         self.root.geometry("1400x850")
