@@ -15,7 +15,7 @@ from PIL import Image, ImageTk, ImageChops
 class PivotFixerApp:
     def __init__(self, root):
         self.root = root
-        self.version = "v0.3.0"
+        self.version = "v0.3.1"
         self.root.title(f"PNG 피봇 보정 툴 (Pixel Art Optimizer) - {self.version}")
 
         self.root.geometry("1400x850")
@@ -791,10 +791,17 @@ class PivotFixerApp:
         need_top = max(0, -rel_y)
         need_bottom = max(0, rel_y + cH)
 
-        half_size = max(need_left, need_right, need_top, need_bottom)
-
-        nW = half_size * 2
-        nH = half_size * 2
+        if not s.get("trim_margin_x", False):
+            # 기본 모드: 정사각형 캔버스 강제
+            half_size = max(need_left, need_right, need_top, need_bottom)
+            nW = half_size * 2
+            nH = half_size * 2
+        else:
+            # 여백 최소화 모드: 세로는 안정 높이 유지, 가로는 필요한 만큼만 할당 (직사각형 가능)
+            half_h = max(need_left, need_right, need_top, need_bottom)
+            half_w = max(need_left, need_right)
+            nW = half_w * 2
+            nH = half_h * 2
 
         nW = max(nW, 2)
         nH = max(nH, 2)
