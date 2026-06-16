@@ -1,0 +1,34 @@
+# Python cache and test artifacts
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Build outputs
+build/
+dist/
+
+# Temporary logs and scratch files
+*.log
+*.tmp
+patch*.py
+append.py
+script.py
+붙여넣은 텍스트*.txt
+
+# Local app settings
+pivot_fixer_settings.json
+
+# Local backup snapshots
+main_before_*.py
+README_before_*.md
+Pivot_Fixer_before_*.spec
+*before*.py
+*before*.md
+*before*.spec
+main_stable_*.py
+main_acl_locked_original_*.py
+_old_files/
