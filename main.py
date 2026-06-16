@@ -60,6 +60,9 @@ class PivotFixerApp:
         self.aseprite_path = tk.StringVar(value="")
         self.aseprite_files = []
         self.ase_selection_state = {}
+        self.ase_tool_window = None
+        self._pending_aseprite_paths = []
+        self._add_aseprite_paths_to_tool = None
         
         # 변수 변경 시 자동 저장 트리거 연결
         self.offset_y.trace_add("write", self._on_offset_change)
@@ -394,7 +397,6 @@ class PivotFixerApp:
         btn_sub_frame = ttk.Frame(frame_actions, style="Panel.TFrame")
         btn_sub_frame.pack(side="top", fill="x", pady=(0, 2))
         ttk.Button(btn_sub_frame, text="🌐 모든 파일에 현재설정 덮어쓰기", style="Primary.TButton", command=self.apply_settings_to_all).pack(side="left", fill="x", expand=True, padx=(0, 2))
-        ttk.Button(btn_sub_frame, text="🎨 Aseprite 도구 열기", command=self.show_aseprite_tools).pack(side="left", fill="x", expand=True, padx=(2, 0))
         
         self.btn_undo = ttk.Button(frame_actions, text="↩ 마지막 작업 되돌리기", command=self.undo_batch)
         self.btn_undo.pack(side="top", fill="x")
@@ -440,6 +442,7 @@ class PivotFixerApp:
         frame_btns = ttk.Frame(lf_list, style="Panel.TFrame")
         frame_btns.pack(side="top", fill="x", padx=10, pady=(10, 5))
         ttk.Button(frame_btns, text="파일/폴더 열기", command=self.load_files_dialog, style="Primary.TButton").pack(side="left", expand=True, fill="x", padx=(0, 5))
+        ttk.Button(frame_btns, text="Aseprite 연동도구", command=self.show_aseprite_tools).pack(side="left", expand=True, fill="x", padx=(0, 5))
         ttk.Button(frame_btns, text="선택 항목 비우기", command=self.clear_list).pack(side="right", fill="x")
 
         frame_check_btns = ttk.Frame(lf_list, style="Panel.TFrame")
@@ -593,20 +596,90 @@ class PivotFixerApp:
         if paths:
             self.add_paths_to_list(paths)
 
+    def is_aseprite_file(self, path):
+        return os.path.isfile(path) and path.lower().endswith((".ase", ".aseprite"))
+
+    def split_dropped_paths_by_type(self, paths):
+        png_files = []
+        aseprite_files = []
+        for p in paths:
+            p_norm = os.path.normpath(p)
+            if os.path.isdir(p_norm):
+                png_files.extend(glob.glob(os.path.join(p_norm, "*.png")))
+                for dirpath, _, filenames in os.walk(p_norm):
+                    for filename in filenames:
+                        f = os.path.join(dirpath, filename)
+                        if self.is_aseprite_file(f):
+                            aseprite_files.append(f)
+            elif p_norm.lower().endswith(".png"):
+                png_files.append(p_norm)
+            elif self.is_aseprite_file(p_norm):
+                aseprite_files.append(p_norm)
+
+        def unique_norm(items):
+            result = []
+            seen = set()
+            for item in items:
+                norm = os.path.normpath(item)
+                key = os.path.normcase(norm)
+                if key not in seen:
+                    seen.add(key)
+                    result.append(norm)
+            return result
+
+        return unique_norm(png_files), unique_norm(aseprite_files)
+
+    def open_aseprite_tools_with_files(self, paths):
+        ase_paths = []
+        seen = {os.path.normcase(os.path.normpath(p)) for p in self.aseprite_files}
+        for path in paths:
+            norm = os.path.normpath(path)
+            key = os.path.normcase(norm)
+            if key not in seen:
+                seen.add(key)
+                ase_paths.append(norm)
+        if not ase_paths:
+            if self.ase_tool_window is not None and self.ase_tool_window.winfo_exists():
+                self.ase_tool_window.lift()
+                self.ase_tool_window.focus_force()
+            else:
+                self.show_aseprite_tools()
+            return
+
+        self._pending_aseprite_paths.extend(ase_paths)
+        if self.ase_tool_window is not None and self.ase_tool_window.winfo_exists():
+            if self._add_aseprite_paths_to_tool:
+                self._add_aseprite_paths_to_tool(self._pending_aseprite_paths)
+                self._pending_aseprite_paths.clear()
+            self.ase_tool_window.lift()
+            self.ase_tool_window.focus_force()
+        else:
+            self.show_aseprite_tools()
+
     def on_drop(self, event):
         paths = self.root.tk.splitlist(event.data)
         if not paths: return
-        
-        png_files = []
-        for p in paths:
-            if os.path.isdir(p):
-                png_files.extend(glob.glob(os.path.join(p, "*.png")))
-            elif p.lower().endswith(".png"):
-                png_files.append(p)
-                
+
+        png_files, aseprite_files = self.split_dropped_paths_by_type(paths)
         if png_files:
             self.add_paths_to_list(png_files)
-        else:
+
+        if aseprite_files:
+            open_tools = messagebox.askyesno(
+                "Aseprite 파일 감지",
+                (
+                    "Aseprite 파일이 감지되었습니다.\n\n"
+                    "PNG 파일은 피봇 보정 목록에 추가하고,\n"
+                    "Aseprite 파일은 연동 도구에서 열 수 있습니다.\n\n"
+                    "Aseprite 연동 도구를 여시겠습니까?"
+                ),
+                parent=self.root
+            )
+            if open_tools:
+                self.open_aseprite_tools_with_files(aseprite_files)
+            elif not png_files:
+                return
+        elif not png_files:
             messagebox.showwarning("안내", "PNG 파일이 발견되지 않았습니다.")
 
     def add_paths_to_list(self, new_paths):
@@ -2300,7 +2373,21 @@ end
         messagebox.showinfo("안내", "Aseprite 피봇 보정 기능은 현재 기초 구조 및 CLI 연결이 준비되었습니다.\n(곧 업데이트됩니다!)")
 
     def show_aseprite_tools(self):
+        if self.ase_tool_window is not None:
+            try:
+                if self.ase_tool_window.winfo_exists():
+                    if self._pending_aseprite_paths and self._add_aseprite_paths_to_tool:
+                        self._add_aseprite_paths_to_tool(self._pending_aseprite_paths)
+                        self._pending_aseprite_paths.clear()
+                    self.ase_tool_window.lift()
+                    self.ase_tool_window.focus_force()
+                    return
+            except tk.TclError:
+                self.ase_tool_window = None
+                self._add_aseprite_paths_to_tool = None
+
         ase_win = tk.Toplevel(self.root)
+        self.ase_tool_window = ase_win
         ase_win.title("Aseprite 연동 도구")
         ase_win.geometry("1200x820")
         ase_win.minsize(1000, 720)
@@ -2405,7 +2492,7 @@ end
 
         # ==================== 좌측: 파일 리스트 ====================
         left_frame = ttk.Frame(main_split, style="Panel.TFrame")
-        main_split.add(left_frame, weight=0) # weight 0 to restrict width
+        main_split.add(left_frame, weight=1)
 
         ttk.Label(left_frame, text="작업 대상 파일 (.ase, .aseprite)").pack(anchor="w", padx=10, pady=(10, 0))
         ttk.Label(left_frame, text="* 파일 및 폴더 드래그 앤 드롭 지원", style="Muted.TLabel").pack(anchor="w", padx=10)
@@ -2995,6 +3082,20 @@ end
                 return True
             return False
 
+        def add_aseprite_paths_from_external(paths):
+            added = False
+            for p in paths:
+                if add_file_or_folder(os.path.normpath(p)):
+                    added = True
+            if added and len(self.aseprite_files) > 0:
+                refresh_ase_file_list(len(self.aseprite_files) - 1)
+                update_inspector()
+                update_expected_label()
+                ase_win.after(80, set_main_split_sash_safe)
+            return added
+
+        self._add_aseprite_paths_to_tool = add_aseprite_paths_from_external
+
         def on_ase_drop(event):
             paths = ase_win.tk.splitlist(event.data)
             if not paths: return
@@ -3088,8 +3189,16 @@ end
         right_frame = ttk.Frame(main_split, style="TFrame")
         main_split.add(right_frame, weight=3)
         
-        # Set sash position initially
-        ase_win.after(100, lambda: main_split.sashpos(0, 280))
+        def set_main_split_sash_safe():
+            try:
+                ase_win.update_idletasks()
+                main_split.sashpos(0, 300)
+            except tk.TclError:
+                pass
+
+        ase_win.after_idle(set_main_split_sash_safe)
+        ase_win.after(80, set_main_split_sash_safe)
+        ase_win.after(250, set_main_split_sash_safe)
 
         # 우측 상단: 실행 옵션 (고정 영역)
         exec_frame = ttk.LabelFrame(right_frame, text=" 실행 옵션 ")
@@ -4592,10 +4701,21 @@ end
                     import shutil
                     shutil.rmtree(tmp_dir, ignore_errors=True)
                 except: pass
+            if self.ase_tool_window is ase_win:
+                self.ase_tool_window = None
+                self._add_aseprite_paths_to_tool = None
             ase_win.destroy()
             
         ase_win.protocol("WM_DELETE_WINDOW", on_close)
         update_expected_label()
+
+        def consume_pending_aseprite_paths_after_ui_ready():
+            if self._pending_aseprite_paths:
+                pending = list(self._pending_aseprite_paths)
+                self._pending_aseprite_paths.clear()
+                add_aseprite_paths_from_external(pending)
+
+        ase_win.after(300, consume_pending_aseprite_paths_after_ui_ready)
 
 
 
