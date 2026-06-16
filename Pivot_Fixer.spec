@@ -21,7 +21,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='Pivot_Fixer_v0.3.2',
+    name='Pivot_Fixer_v0.3.3',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -40,5 +40,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Pivot_Fixer_v0.3.2',
+    name='Pivot_Fixer_v0.3.3',
 )

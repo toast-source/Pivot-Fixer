@@ -18,7 +18,7 @@ from PIL import Image, ImageTk, ImageChops
 class PivotFixerApp:
     def __init__(self, root):
         self.root = root
-        self.version = "v0.3.2"
+        self.version = "v0.3.3"
         self.root.title(f"PNG 피봇 보정 툴 (Pixel Art Optimizer) - {self.version}")
 
         self.root.geometry("1400x850")
